@@ -75,7 +75,7 @@ void function SetBTLoadout( entity titan )
 					soul.s.shouldInfiniteDoom <- false // initlizing...
 					soul.s.lastPrimaryAmmo <- 1.0 	// float, to save ammo counts
 					//soul.s.disableTitanPick <- true // seems already set in titan_replace.gnut. setting players unable to replace weapons from ground
-					SendHudMessage(player, "已启用SB-7274装备\n帝王被动将修改皮肤及处决动画\n取消\"边境帝王\"战绘以使用原版帝王",  -1, 0.2, 200, 200, 225, 255, 0.15, 12, 1);
+					SendHudMessage(player, "Equipped with FakeBT-7274\nPassives Will Change It's Execution Animation and Camo",  -1, 0.2, 200, 200, 225, 255, 0.15, 12, 1);
 				}
 
 				// Disable doomed in TTDM
@@ -186,7 +186,7 @@ void function SetBTOffhands( entity player )
 				{
 					if( !PlayerHasWeapon( player, "mp_titanability_smoke" ) )
 					{
-						SendHudMessage( player, "切换至远征泰坦技能组", -1, 0.3, 255, 200, 0, 0, 0.15, 6, 0.15 )
+						SendHudMessage( player, "Switching to Expedition Loadout", -1, 0.3, 255, 200, 0, 0, 0.15, 6, 0.15 )
 						//Ordnance
 						//player.TakeOffhandWeapon(OFFHAND_ORDNANCE)	
 						//player.GiveOffhandWeapon("mp_titanweapon_shoulder_rockets", OFFHAND_ORDNANCE )
@@ -215,7 +215,7 @@ void function SetBTOffhands( entity player )
 				{
 					if( !PlayerHasWeapon( player, "mp_titanweapon_heat_shield" ) )
 					{
-						SendHudMessage( player, "切换至掷弹兵泰坦技能组", -1, 0.3, 255, 200, 0, 0, 0.15, 6, 0.15 )
+						SendHudMessage( player, "Switching to Grenadier Loadout", -1, 0.3, 255, 200, 0, 0, 0.15, 6, 0.15 )
 						//Ordnance
 						player.TakeOffhandWeapon(OFFHAND_ORDNANCE)
 						player.GiveOffhandWeapon("mp_titanweapon_dumbfire_rockets", OFFHAND_ORDNANCE )
@@ -299,7 +299,7 @@ void function SetBTOffhands( entity player )
 				{
 					if( !PlayerHasWeapon( player, "mp_titanweapon_flame_wall" ) )
 					{
-						SendHudMessage( player, "切换至野兽泰坦技能组", -1, 0.3, 255, 200, 0, 0, 0.15, 6, 0.15 )
+						SendHudMessage( player, "Switching to Brute Loadout", -1, 0.3, 255, 200, 0, 0, 0.15, 6, 0.15 )
 						//Ordnance
 						player.TakeOffhandWeapon(OFFHAND_ORDNANCE)	
 						player.GiveOffhandWeapon("mp_titanweapon_flame_wall", OFFHAND_ORDNANCE )
@@ -413,7 +413,7 @@ void function SetAutoTitanTitle( entity titan )
 {
 	#if SERVER
 	if( IsValid(titan) && titan.GetModelName() == $"models/titans/buddy/titan_buddy.mdl" )
-		titan.SetTitle( "SB-7274" )
+		titan.SetTitle( "FakeBT-7274" )
 	#endif
 }
 
@@ -421,7 +421,7 @@ void function SetPlayerTitanTitle( entity player )
 {
 	#if SERVER
 	if( IsValid(player) && player.GetModelName() == $"models/titans/buddy/titan_buddy.mdl" )
-		player.SetTitle( "SB-7274" )
+		player.SetTitle( "FakeBT-7274" )
 	#endif
 }
 

@@ -119,22 +119,22 @@ void function TitanReplace_SetTitanLoadoutReplace( entity titan )
 	}
 	if( titan.GetModelName() == $"models/titans/medium/titan_medium_tone_prime.mdl" )
 	{
-		SendHudMessage(player, "已启用天图泰坦装备，取消至尊泰坦以使用原版强力",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1)
+		SendHudMessage(player, "Equipped with Atlas Loadout",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1)
 		BecomeAtlas( titan, false, true )
 	}
 	if( titan.GetModelName() == $"models/titans/heavy/titan_heavy_legion_prime.mdl" )
 	{
-		SendHudMessage(player, "已启用巨妖泰坦装备，取消至尊泰坦以使用原版军团",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1);
+		SendHudMessage(player, "Equipped with Ogre Loadout",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1);
 		BecomeOgre( titan, false, true )
 	}
 	if( titan.GetModelName() == $"models/titans/light/titan_light_ronin_prime.mdl" )
 	{
-		SendHudMessage(player, "已启用游侠泰坦装备，取消至尊泰坦以使用原版浪人",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1);
+		SendHudMessage(player, "Equipped with Stryder Loadout",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1);
 		BecomeStryder( titan, false, true )
 	}
 	if( titan.GetModelName() == $"models/titans/heavy/titan_heavy_scorch_prime.mdl" )
 	{
-		SendHudMessage(player, "已启用野牛泰坦装备，取消至尊泰坦以使用原版烈焰",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1);
+		SendHudMessage(player, "Equipped with Bison Loadout",  -1, 0.3, 200, 200, 225, 255, 0.15, 5, 1);
 		titanSoul.s.disableTitanPick = true // setting players unable to replace weapons from ground
 		BecomeBison( titan, false, true )
 	}
@@ -262,7 +262,7 @@ void function BecomeIon( entity titan, bool isPickup = false, bool isSpawning = 
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -274,10 +274,10 @@ void function BecomeIon( entity titan, bool isPickup = false, bool isSpawning = 
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 离子 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-				player.SetTitle( "離子" )
+            	SendHudMessage( player, "Changing to Ion Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+				player.SetTitle( "Ion" )
 			}
-			soul.s.titanTitle = "離子"
+			soul.s.titanTitle = "Ion"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -356,7 +356,7 @@ void function BecomeTone( entity titan, bool isPickup = false, bool isSpawning =
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -368,10 +368,10 @@ void function BecomeTone( entity titan, bool isPickup = false, bool isSpawning =
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 强力 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-				player.SetTitle( "強力" )
+            	SendHudMessage( player, "Changing to Tone Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+				player.SetTitle( "Tone" )
 			}
-			soul.s.titanTitle = "強力"
+			soul.s.titanTitle = "Tone"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -448,7 +448,7 @@ void function BecomeAtlas( entity titan, bool isPickup = false, bool isSpawning 
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -460,10 +460,10 @@ void function BecomeAtlas( entity titan, bool isPickup = false, bool isSpawning 
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 天图 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "天圖" )
+            	SendHudMessage( player, "Changing to Atlas Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Atlas" )
 			}
-			soul.s.titanTitle = "天圖"
+			soul.s.titanTitle = "Atlas"
 			soul.s.shouldFPEmbark = true
 			soul.s.disableOffhandSmoke = true
 			soul.s.classicExecution = true
@@ -512,7 +512,7 @@ void function BecomeRonin( entity titan, bool isPickup = false, bool isSpawning 
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -524,10 +524,10 @@ void function BecomeRonin( entity titan, bool isPickup = false, bool isSpawning 
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-           		SendHudMessage( player, "更换至 浪人 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "浪人" )
+           		SendHudMessage( player, "Changing to Ronin Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Ronin" )
 			}
-			soul.s.titanTitle = "浪人"
+			soul.s.titanTitle = "Ronin"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -604,7 +604,7 @@ void function BecomeNorthstar( entity titan, bool isPickup = false, bool isSpawn
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -616,10 +616,10 @@ void function BecomeNorthstar( entity titan, bool isPickup = false, bool isSpawn
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 北极星 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "北極星" )
+            	SendHudMessage( player, "Changing to Northstar Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Northstar" )
 			}
-			soul.s.titanTitle = "北極星"
+			soul.s.titanTitle = "Northstar"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -699,7 +699,7 @@ void function BecomeStryder( entity titan, bool isPickup = false, bool isSpawnin
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -711,10 +711,10 @@ void function BecomeStryder( entity titan, bool isPickup = false, bool isSpawnin
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 游侠 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "游俠" )
+            	SendHudMessage( player, "Changing to Stryder Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Stryder" )
 			}
-			soul.s.titanTitle = "游俠"
+			soul.s.titanTitle = "Stryder"
 			soul.s.shouldFPEmbark = true
 			soul.s.disableOffhandSmoke = true
 			soul.s.classicExecution = true
@@ -764,7 +764,7 @@ void function BecomeScorch( entity titan, bool isPickup = false, bool isSpawning
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -776,10 +776,10 @@ void function BecomeScorch( entity titan, bool isPickup = false, bool isSpawning
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 烈焰 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "烈焰" )
+            	SendHudMessage( player, "Changing to Scorch Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Scorch" )
 			}
-			soul.s.titanTitle = "烈焰"
+			soul.s.titanTitle = "Scorch"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -853,7 +853,7 @@ void function BecomeLegion( entity titan, bool isPickup = false, bool isSpawning
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -865,10 +865,10 @@ void function BecomeLegion( entity titan, bool isPickup = false, bool isSpawning
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 军团 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "軍團" )
+            	SendHudMessage( player, "Changing to Legion Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Legion" )
 			}
-			soul.s.titanTitle = "軍團"
+			soul.s.titanTitle = "Legion"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -945,7 +945,7 @@ void function BecomeOgre( entity titan, bool isPickup = false, bool isSpawning =
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -957,10 +957,10 @@ void function BecomeOgre( entity titan, bool isPickup = false, bool isSpawning =
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 巨妖 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "巨妖" )
+            	SendHudMessage( player, "Changing to Ogre Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Ogre" )
 			}
-			soul.s.titanTitle = "巨妖"
+			soul.s.titanTitle = "Ogre"
 			soul.s.shouldFPEmbark = true
 			soul.s.disableOffhandSmoke = true
 			soul.s.classicExecution = true
@@ -1011,7 +1011,7 @@ void function BecomeBison( entity titan, bool isPickup = false, bool isSpawning 
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -1025,10 +1025,10 @@ void function BecomeBison( entity titan, bool isPickup = false, bool isSpawning 
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 野牛 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "野牛" )
+            	SendHudMessage( player, "Changing to Bison Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Bison" )
 			}
-			soul.s.titanTitle = "野牛"
+			soul.s.titanTitle = "Bison"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -1073,7 +1073,7 @@ void function BecomeMonarch( entity titan, bool isPickup = false, bool isSpawnin
 		{
             if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -1085,10 +1085,10 @@ void function BecomeMonarch( entity titan, bool isPickup = false, bool isSpawnin
                 titan.TakeWeaponNow( offhand.GetWeaponClassName() )
 			if( !isSpawning )
 			{
-            	SendHudMessage( player, "更换至 帝王 泰坦技能组", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
-            	player.SetTitle( "帝王" )
+            	SendHudMessage( player, "Changing to Monarch Loadout", -1, 0.3, 255, 255, 0, 0, 0.15, 6, 0.15 )
+            	player.SetTitle( "Monarch" )
 			}
-			soul.s.titanTitle = "帝王"
+			soul.s.titanTitle = "Monarch"
 			soul.s.shouldFPEmbark = false
 			soul.s.disableOffhandSmoke = false
 			soul.s.classicExecution = false
@@ -1137,7 +1137,7 @@ void function BecomeBrute4( entity titan, bool isPickup = false, bool isSpawning
 		{
 			if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )
@@ -1215,7 +1215,7 @@ void function BecomeArchon( entity titan, bool isPickup = false, bool isSpawning
 		{
 			if( IsTitanCoreFiring( player ) )
             {
-                SendHudMessage( player, "核心启动期间不可以更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+                SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
                 return
             }
 			if( !isPickup )

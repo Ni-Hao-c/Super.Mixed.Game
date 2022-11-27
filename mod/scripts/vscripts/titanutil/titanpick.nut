@@ -65,7 +65,7 @@ void function DropPlayerTitanWeapon_Threaded( entity player, vector droppoint, v
                 modelname = GetWorldModelName( weapons[0] )
             if( modelname == $"" )
                 return
-            if( name == "未知武器" )
+            if( name == "Unknown Weapon" )
                 return
             int skin = weapons[0].GetSkin()
             int camo = weapons[0].GetCamo()
@@ -74,7 +74,7 @@ void function DropPlayerTitanWeapon_Threaded( entity player, vector droppoint, v
             weaponmodel.EndSignal( "OnDestroy" )
             weaponmodel.SetUsable()
             weaponmodel.SetUsableByGroup("titan")
-            weaponmodel.SetUsePrompts("按住 %use% 以撿起" + name, "按下 %use% 以撿起" + name)
+            weaponmodel.SetUsePrompts("Hold %use% to Pick up " + name, "Press %use% to Pick up " + name)
             AddCallback_OnUseEntity( weaponmodel, GiveDroppedTitanWeapon )
 
             TitanWeaponStruct tempweapon
@@ -206,12 +206,12 @@ function GiveDroppedTitanWeapon( weaponmodel, player )
 	if( !canPickUp )
 	{
 		string title = player.GetTitle()
-		SendHudMessage(player, "当前机体不可更换装备", -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1) // title + " 不可更换装备", will display a weird string for vanilla titans
+		SendHudMessage(player, "The Titan You're Using is Unable to Change Loadout", -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1) // title + " 不可更换装备", will display a weird string for vanilla titans
 		return
 	}
 	if( IsTitanCoreFiring( player ) )
 	{
-		SendHudMessage( player, "核心启动期间不可更换装备", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
+		SendHudMessage( player, "No Loadout Change Allowed During Core Activation", -1, 0.3, 255, 255, 0, 0, 0, 3, 0 )
 		return
 	}
         
@@ -246,17 +246,17 @@ string function GetWeaponName_ReturnString( entity weapon )
             return "分裂槍 [纏結能量]"
         if( mods.contains( "pas_ion_weapon_ads" ) )
             return "分裂槍 [折射鏡片]"
-        return "分裂槍"
+        return "Spittle Rifle"
     }
     if( classname == "mp_titanweapon_sticky_40mm" )
     {
         if( mods.contains( "atlas_40mm" ) )
-            return "40mm機炮"
+            return "40mm Cannon"
         if( mods.contains( "pas_tone_weapon" ) )
             return "40mm追蹤機炮 [強化追蹤彈藥]"
         if( mods.contains( "pas_tone_burst" ) )
             return "40mm追蹤機炮 [連發填充器]"
-        return "40mm追蹤機炮"
+        return "40mm Tracker Cannon"
     }
     if( classname == "mp_titanweapon_predator_cannon" )
     {
@@ -264,13 +264,13 @@ string function GetWeaponName_ReturnString( entity weapon )
             return "獵殺者機炮 [強化彈藥容量]"
         if( mods.contains( "pas_legion_spinup" ) )
             return "獵殺者機炮 [輕合金]"
-        return "獵殺者機炮"
+        return "Predator Cannon"
     }
     if( classname == "mp_titanweapon_meteor" )
     {
         if( mods.contains( "pas_scorch_weapon" ) )
             return "T-203鋁熱劑發射器 [野火投射器]"
-        return "T-203鋁熱劑發射器"
+        return "T-203 Thermite Launcher"
     }
     if( classname == "mp_titanweapon_xo16_vanguard" )
     {
@@ -292,20 +292,20 @@ string function GetWeaponName_ReturnString( entity weapon )
                 return "XO-16 [電弧彈藥，快速武裝，加速器]"
             return "XO-16 [電弧彈藥，加速器]"
         }
-        return "XO-16"
+        return "XO-16 Battle Rifle"
     }
     if( classname == "mp_titanweapon_leadwall" )
     {
         if( mods.contains( "pas_ronin_weapon" ) )
             return "天女散花 [彈跳彈藥]"
-        return "天女散花"
+        return "LeadWall"
     }
     if( classname == "mp_titanweapon_sniper" )
     {
         if( mods.contains( "arc_cannon" ) )
         {
             //temp fix
-            return "未知武器"
+            return "Unknown Weapon"
             if( mods.contains( "capacitor" ) )
                 return "電弧機炮 [電容器]"
             if( mods.contains( "chain_reaction" ) )
@@ -318,7 +318,7 @@ string function GetWeaponName_ReturnString( entity weapon )
             return "電漿磁軌炮 [威脅光鏡]"
         if( mods.contains( "pas_northstar_weapon" ) )
             return "電漿磁軌炮 [穿刺射擊]"
-        return "電漿磁軌炮"
+        return "Plasma Railgun"
     }
     if( classname == "mp_titanweapon_rocketeer_rocketstream" )
     {
@@ -329,7 +329,7 @@ string function GetWeaponName_ReturnString( entity weapon )
             return "四段火箭 [直射系統]"
         if( mods.contains( "rapid_detonator" ) )
             return "四段火箭 [快速引爆]"
-        return "四段火箭"
+        return "Quad Rockets"
     }
     if( classname == "mp_titanweapon_triplethreat" )
     {
@@ -339,9 +339,9 @@ string function GetWeaponName_ReturnString( entity weapon )
             return "三連環榴彈 [液壓驅動]"
         if( mods.contains( "mine_field" ) )
             return "三連環榴彈 [地雷區]"
-        return "三連環榴彈"
+        return "Triple Threat"
     }
-    return "未知武器"
+    return "Unknown Weapon"
 }
 
 asset function GetWorldModelName( entity weapon )
