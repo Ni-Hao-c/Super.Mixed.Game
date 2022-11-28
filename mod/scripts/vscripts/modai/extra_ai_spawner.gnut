@@ -304,7 +304,8 @@ void function ExtraSpawner_SpawnNPC( vector pos, vector rot, int team, string co
     SetSpawnOption_AISettings( spawnNpc, content )
 	DispatchSpawn( spawnNpc ) // never delayed dispatchSpawn()
 
-    InitFireteamDropPod( pod )
+	// dissolve the pod right after landing, since it this kind of pod spawning is hacky( not spawning through pod function but set parented ) and unable to dissolve itself.
+    InitFireteamDropPod( pod, eDropPodFlag.DISSOLVE_AFTER_DISEMBARKS ) 
 	spawnNpc.SetParent( pod, "ATTACH", true )
 	waitthread LaunchAnimDropPod( pod, "pod_testpath", pos, rot )
 
@@ -315,9 +316,11 @@ void function ExtraSpawner_SpawnNPC( vector pos, vector rot, int team, string co
 void function ExtraSpawner_SpawnGunShip( vector pos, vector rot, int team )
 {
 	entity gunship = CreateNPC("npc_gunship", team, pos, rot )
+	HideName( gunship ) // won't make it's info target( or health bar ) teleport into battle
 	DispatchSpawn( gunship )
 	thread PlayAnim( gunship , "st_AngelCity_IMC_Win_ComeIn")
     WaittillAnimDone( gunship )
+	ShowName( gunship ) // show info target again
 	vector spawnpoint = gunship.GetOrigin()
 	vector spawnang = gunship.GetAngles()
 	gunship.Destroy()
