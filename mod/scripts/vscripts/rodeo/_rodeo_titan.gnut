@@ -3404,15 +3404,17 @@ void function ClassicRodeo_DoHintsBaseOnRodeoConditions( entity player, entity t
 	if( friendlyFireOn || sameTeam ) // offensive hint
 	{
 		if( titanHasBattery )
-			curHints = "按下 近戰 拔取電池"
+			curHints = "Press MELEE to Remove Batteries"
 		else
-			curHints = "可直接攻擊電池倉，或按下 近戰 投擲手雷"
+			curHints = "Attack Directly to Battery Panel, or Press MELEE to Throw Grenade"
 	}
-	if( curHints != "" )
-		puncToAdd = "，"
 
 	if( ableToApplyBattery && ( friendlyFireOn || sameTeam ) )
-		curHints = curHints + puncToAdd + "按下 使用/登機 安裝電池"
+	{
+		if( curHints != "" )
+			puncToAdd = ", "
+		curHints = curHints + puncToAdd + "Press USE/EMBARK to Apply Battery"
+	}
 
 	if( curHints == "" )
 		return
