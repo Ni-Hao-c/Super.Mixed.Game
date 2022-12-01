@@ -371,13 +371,6 @@
 			}
 		},
 		{
-			"Path": "/nessieutil/spawn_mod.nut",
-			"RunOn": "SERVER && MP",
-			"ServerCallback": {
-				"After": "SpawnCommand"
-			}
-		},
-		{
 			"Path": "/modifiers/forced_playlist.gnut",
 			"RunOn": "SERVER && MP"
 		},
