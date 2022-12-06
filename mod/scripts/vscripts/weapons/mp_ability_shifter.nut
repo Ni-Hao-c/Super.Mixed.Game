@@ -503,6 +503,8 @@ void function PortalStart( entity player, entity weapon )
 	
 	while( true )
 	{
+		if( !IsValid( player ) ) // player has been fucked up
+			return
 		if( IsAlive( player ) )
 		{
 			//float distance = fabs( Distance2D( startPos, player.GetOrigin() ) )
@@ -513,10 +515,14 @@ void function PortalStart( entity player, entity weapon )
 				break
 			if( !IsValid( weapon ) )
 				break
+			entity activeWeapon = player.GetActiveWeapon()
 			if( startTime + PORTAL_DEPLOY_TIME < Time() ) // defensive fix
 			{
-				if( player.GetActiveWeapon().HasMod( "wraith_portal" ) )
-					break
+				if( IsValid( activeWeapon ) ) // defensive fix for sometimes disableWeapon
+				{
+					if( activeWeapon.HasMod( "wraith_portal" ) )
+						break
+				}
 			}
 			/*
 			SendHudMessage( player,"传送门距离剩余：" + string( ( 1 - distance / PORTAL_MAX_DISTANCE ) * 100 ) + "%", -1, 0.65, 255, 255, 100, 1, 0, 0.2, 0 )
@@ -537,6 +543,8 @@ void function PortalStart( entity player, entity weapon )
 				lastTickPos = player.GetOrigin()
 			}
 			wait PORTAL_TICKRATE // wait before it can trigger "continue"
+			if( !IsValid( player ) ) // player has been fucked up
+				return
 			if( isInfiniteDistance )
 			{
 				SendHudMessage( player,"传送门距离剩余：无限制", -1, 0.65, 255, 255, 100, 1, 0, 0.2, 0 )
@@ -1005,7 +1013,7 @@ void function PortalTravelThink( entity trigger, entity player )
 					}
 					float travelTimeLeft = segmentsLeft * timePerSigment
 					//print( travelTimeLeft )
-					if( travelTimeLeft < 1.0 && !playedPreEndSound ) // near end, play sound. this kind of sound have a delay
+					if( travelTimeLeft < 0.8 && !playedPreEndSound ) // near end, play sound. this kind of sound have a delay
 					{
 						playedPreEndSound = true
 						EmitSoundOnEntityOnlyToPlayer( player, player, "Pilot_PhaseShift_WarningToEnd_1P" )
@@ -1034,7 +1042,7 @@ void function PortalTravelThink( entity trigger, entity player )
 					}
 					float travelTimeLeft = segmentsLeft * timePerSigment
 					//print( travelTimeLeft )
-					if( travelTimeLeft < 1.0 && !playedPreEndSound ) // near end, play sound. this kind of sound have a delay
+					if( travelTimeLeft < 0.8 && !playedPreEndSound ) // near end, play sound. this kind of sound have a delay
 					{
 						playedPreEndSound = true
 						EmitSoundOnEntityOnlyToPlayer( player, player, "Pilot_PhaseShift_WarningToEnd_1P" )

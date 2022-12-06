@@ -29,6 +29,9 @@ global function ShouldRunEvac
 global function GiveTitanToPlayer
 global function GetTimeLimit_ForGameMode
 
+// i want my game to have these!
+global function SetWaitingForPlayersMaxDuration // so you don't have to wait so freaking long
+
 struct {
 	// used for togglable parts of gamestate
 	bool usePickLoadoutScreen
@@ -64,6 +67,8 @@ struct {
 	// modified
 	bool enteredSuddenDeath = false
 	bool playFactionDialogue = true
+
+	float waitingForPlayersMaxDuration = 30.0
 } file
 
 void function PIN_GameStart()
@@ -146,9 +151,9 @@ void function GameStateEnter_WaitingForPlayers()
 void function WaitForPlayers()
 {
 	// note: atm if someone disconnects as this happens the game will just wait forever
-	float endTime = Time() + 30.0
+	float endTime = Time() + file.waitingForPlayersMaxDuration
 	if( ClassicMP_IsRunningDropshipIntro() )
-		endTime = Time() + 20.0
+		endTime = Time() + ( file.waitingForPlayersMaxDuration * 0.5 )
 	
 	while ( ( GetPendingClientsCount() != 0 && endTime > Time() ) || GetPlayerArray().len() == 0 )
 		WaitFrame()
@@ -161,7 +166,7 @@ void function WaitForPlayers()
 			//EmitSoundOnEntityOnlyToPlayer( player, player, "classicmp_warpjump" )
 		// this is better! late join players can also hear it
 		EmitSoundAtPosition( TEAM_UNASSIGNED, < 0,0,0 >, "classicmp_warpjump" )
-		wait 7.3
+		wait 7.3 // sound duration
 	}
 	
 	wait 1.0 // bit nicer
@@ -376,20 +381,33 @@ void function GameStateEnter_WinnerDetermined_Threaded()
 
 		// all waits below should be the same time as PlayerWatchesRoundWinningKillReplay() does
 		wait ROUND_WINNING_KILL_REPLAY_SCREEN_FADE_TIME
-		wait GAME_POSTROUND_CLEANUP_WAIT // to have better visual and do a extra wait
+
+		if( IsValid( replayAttacker ) ) // if attacker not valid, it means replay can't be played, maybe wait shorter
+		{	
+			wait GAME_POSTROUND_CLEANUP_WAIT // to have better visual and do a extra wait
+			
+			// done cleanup wait
+			file.roundWinningKillReplayAttacker = null // clear this
+
+			CleanUpEntitiesForRoundEnd() // fade should be done by this point, so cleanup stuff now when people won't see
+
+			float finalWait = replayLength - 2.0 // this will match PlayerWatchesRoundWinningKillReplay() does
+			if( finalWait <= 0 )
+				finalWait = 2.0 // defensive fix
+			wait finalWait
+		}
+		else // failed to do replay
+		{
+			// done cleanup wait
+			file.roundWinningKillReplayAttacker = null // clear this
+
+			CleanUpEntitiesForRoundEnd() // fade should be done by this point, so cleanup stuff now when people won't see
 		
-		// done cleanup wait
-		file.roundWinningKillReplayAttacker = null // clear this
-		
-		if ( killcamsWereEnabled )
+			wait GAME_POSTROUND_CLEANUP_WAIT
+		}
+
+		if ( killcamsWereEnabled ) // reset last
 			SetKillcamsEnabled( true )
-
-		CleanUpEntitiesForRoundEnd() // fade should be done by this point, so cleanup stuff now when people won't see
-
-		float finalWait = replayLength - 2.0 // this will match PlayerWatchesRoundWinningKillReplay() does
-		if( finalWait <= 0 )
-			finalWait = 2.0 // defensive fix
-		wait finalWait
 		
 		//foreach( entity player in GetPlayerArray() )
 		//{
@@ -397,7 +415,7 @@ void function GameStateEnter_WinnerDetermined_Threaded()
 		//} 
 
 	}
-	else if ( IsRoundBased() )
+	else if ( IsRoundBased() ) // no replay roundBased
 	{
 		// these numbers are temp and should really be based on consts of some kind
 		foreach( entity player in GetPlayerArray() )
@@ -483,35 +501,45 @@ void function PlayerWatchesRoundWinningKillReplay( entity player, entity replayA
 
 	//player.SetKillReplayDelay( Time() - replayLength, THIRD_PERSON_KILL_REPLAY_ALWAYS )
 	float totalTime = replayLength + GAME_POSTROUND_CLEANUP_WAIT
-	float replayDelay = Time() - totalTime
-	if( replayDelay <= 0 )
-		replayDelay = 0
-	player.SetKillReplayDelay( replayDelay, THIRD_PERSON_KILL_REPLAY_ALWAYS )
-	player.SetKillReplayInflictorEHandle( replayAttacker.GetEncodedEHandle() )
-	if( IsValid( replayVictim ) )
-		player.SetKillReplayVictim( replayVictim )
-	player.SetViewIndex( replayAttacker.GetIndexForEntity() )
-	player.SetIsReplayRoundWinning( true )
+	if( IsValid( replayAttacker ) )
+	{
+		float replayDelay = Time() - totalTime
+		if( replayDelay <= 0 )
+			replayDelay = 0
+		player.SetKillReplayDelay( replayDelay, THIRD_PERSON_KILL_REPLAY_ALWAYS )
+		player.SetKillReplayInflictorEHandle( replayAttacker.GetEncodedEHandle() )
+		if( IsValid( replayVictim ) )
+			player.SetKillReplayVictim( replayVictim )
+		player.SetViewIndex( replayAttacker.GetIndexForEntity() )
+		player.SetIsReplayRoundWinning( true )
+
+		// do a fade if replay is played
+		wait totalTime - 2.0
+		ScreenFadeToBlackForever( player, 2.0 )
+
+		wait 2.0
+	}
+	else // can't do replay, wait a little bit
+		wait GAME_POSTROUND_CLEANUP_WAIT
 	
 	//if ( replayLength >= ROUND_WINNING_KILL_REPLAY_LENGTH_OF_REPLAY - 0.5 ) // only do fade if close to full length replay
 	//{
-		// this doesn't work because fades don't work on players that are in a replay, unsure how official servers do this
-		//wait replayLength - 2.0
-		wait totalTime - 2.0
-		ScreenFadeToBlackForever( player, 2.0 )
+	// this doesn't work because fades don't work on players that are in a replay, unsure how official servers do this
+	//	wait replayLength - 2.0
 	
-		wait 2.0
 	//}
 	//else
 	//	wait replayLength
+
+	
 		
 	//wait ROUND_WINNING_KILL_REPLAY_POST_DEATH_TIME // to have better visual
 	//player.SetPredictionEnabled( true ) doesn't seem needed, as native code seems to set this on respawn
 	
 	// should do these in GameStateEnter_WinnerDetermined_Threaded()
 	//WaitFrame() // bit nicer
-	player.ClearReplayDelay()
-	player.ClearViewEntity()
+	//player.ClearReplayDelay() // these should done in OnPlayerRespawned
+	//player.ClearViewEntity()
 
 	//WaitFrame()
 	//ScreenFadeFromBlack( player, 2.0, 10.0 )
@@ -567,29 +595,34 @@ void function GameStateEnter_SwitchingSides_Threaded()
 
 	// all waits below should be the same time as PlayerWatchesSwitchingSidesKillReplay() does
 	float timeToWait = doReplay ? SWITCHING_SIDES_DELAY_REPLAY : SWITCHING_SIDES_DELAY
-	wait replayLength + timeToWait - 2.0
+
+	if( !doReplay )
+		wait replayLength + timeToWait - GAME_POSTROUND_CLEANUP_WAIT
+	else
+		wait replayLength + timeToWait
 
 	file.roundWinningKillReplayAttacker = null // reset this after replay
-	if ( killcamsWereEnabled )
-		SetKillcamsEnabled( true )
 
 	if( file.playFactionDialogue )
 	{
 		PlayFactionDialogueToTeam( "mp_sideSwitching", TEAM_IMC )
 		PlayFactionDialogueToTeam( "mp_sideSwitching", TEAM_MILITIA )
 	}
+
+	CleanUpEntitiesForRoundEnd() // clean up players after dialogue
 	
 	//foreach( entity player in GetPlayerArray() )
 	//	SetPlayerCameraToIntermissionCam( player )
 	
-	wait GAME_POSTROUND_CLEANUP_WAIT // wait for better visual
+	wait GAME_POSTROUND_CLEANUP_WAIT // wait for better visual, may be no need for now?
 
 	file.hasSwitchedSides = true
 	SetServerVar( "switchedSides", 1 )
-	
-	CleanUpEntitiesForRoundEnd() // clean up players after dialogue
 
-	wait 2.0 // bit nicer?
+	//wait 2.0 // bit nicer? 
+
+	if ( killcamsWereEnabled ) // reset here
+		SetKillcamsEnabled( true )
 
 	if ( file.usePickLoadoutScreen )
 		SetGameState( eGameState.PickLoadout )
@@ -597,7 +630,7 @@ void function GameStateEnter_SwitchingSides_Threaded()
 		SetGameState ( eGameState.Prematch )
 }
 
-void function PlayerWatchesSwitchingSidesKillReplay( entity player, entity replayAttacker, entity replayVictim, bool doReplay, float replayLength )
+void function PlayerWatchesSwitchingSidesKillReplay( entity player, entity replayAttacker, entity replayVictim, bool doReplay, float replayLength ) // ( entity player, float replayLength )
 {
 	player.EndSignal( "OnDestroy" )
 	player.FreezeControlsOnServer()
@@ -605,7 +638,8 @@ void function PlayerWatchesSwitchingSidesKillReplay( entity player, entity repla
 	ScreenFadeToBlackForever( player, SWITCHING_SIDES_DELAY_REPLAY ) // automatically cleared 
 	wait SWITCHING_SIDES_DELAY_REPLAY
 	
-	if ( doReplay )
+	//if ( doReplay )
+	if( doReplay && IsValid( replayAttacker ) ) // should do this
 	{
 		player.SetPredictionEnabled( false ) // prediction fucks with replays
 	
@@ -622,30 +656,34 @@ void function PlayerWatchesSwitchingSidesKillReplay( entity player, entity repla
 		//player.SetKillReplayDelay( Time() - replayLength, THIRD_PERSON_KILL_REPLAY_ALWAYS )
 		player.SetKillReplayDelay( replayDelay, THIRD_PERSON_KILL_REPLAY_ALWAYS )
 		player.SetKillReplayInflictorEHandle( replayAttacker.GetEncodedEHandle() )
-		if( IsValid( replayVictim ) )
+		if( IsValid( replayVictim ) ) // maybe no victim for capturing flags
 			player.SetKillReplayVictim( replayVictim )
 		player.SetViewIndex( replayAttacker.GetIndexForEntity() )
 		player.SetIsReplayRoundWinning( true )
 		
 		//if ( replayLength >= SWITCHING_SIDES_DELAY - 2.0 ) // only do fade if close to full length replay
 		//{
-			// this doesn't work because fades don't work on players that are in a replay, unsure how official servers do this
-			//wait replayLength - 2.0
-			wait totalTime - 2.0
-			ScreenFadeToBlackForever( player, 2.0 )
+		// this doesn't work because fades don't work on players that are in a replay, unsure how official servers do this
+		//wait replayLength - 2.0
+		float finalWait = replayLength - 2.0
+		if( finalWait <= 0 )
+			finalWait = 0.0
+		wait finalWait
+		ScreenFadeToBlackForever( player, 2.0 )
 
-			wait 2.0
+		wait 2.0
 		//}
 		//else
 		//	wait replayLength
+
+		wait GAME_POSTROUND_CLEANUP_WAIT // bit nicer to match GameStateEnter_SwitchingSides_Threaded() does
 	}
 	else
 		wait SWITCHING_SIDES_DELAY // extra delay if no replay
 	
 	//player.SetPredictionEnabled( true ) doesn't seem needed, as native code seems to set this on respawn
-	wait GAME_POSTROUND_CLEANUP_WAIT // bit nicer to match GameStateEnter_SwitchingSides_Threaded() does
-	player.ClearReplayDelay()
-	player.ClearViewEntity()
+	//player.ClearReplayDelay() // these should done in OnPlayerRespawned
+	//player.ClearViewEntity()
 }
 
 // eGameState.SuddenDeath
@@ -678,6 +716,10 @@ void function GameStateEnter_SuddenDeath()
 		SetWinner( TEAM_MILITIA, "#GAMEMODE_ENEMY_PILOTS_ELIMINATED", "#GAMEMODE_FRIENDLY_PILOTS_ELIMINATED" )
 		return
 	}
+	
+	// sudden-death really begins
+	foreach( entity player in GetPlayerArray() )
+		PlaySuddenDeathDialogueBasedOnFaction( player )
 
 	//thread SuddenDeathCheckAnyPlayerAlive()
 }
@@ -815,6 +857,7 @@ void function OnPlayerKilled( entity victim, entity attacker, var damageInfo )
 	// note: pilotstitans is just win if enemy team runs out of either pilots or titans
 	if ( IsPilotEliminationBased() || GetGameState() == eGameState.SuddenDeath )
 	{
+		//if ( GetPlayerArrayOfTeam_Alive( victim.GetTeam() ).len() == 0 )
 		if ( GetPlayerArrayOfTeam_Alive( victim.GetTeam() ).len() == 0 )
 		{
 			// for ffa we need to manually get the last team alive 
@@ -1279,4 +1322,9 @@ void function PlayScoreEventFactionDialogue( string winningLarge, string losingL
 		PlayFactionDialogueToTeam( "scoring_" + winning, winningTeam )
 		PlayFactionDialogueToTeam( "scoring_" + losing, losingTeam )
 	}
+}
+
+void function SetWaitingForPlayersMaxDuration( float duration )
+{
+	file.waitingForPlayersMaxDuration = duration
 }

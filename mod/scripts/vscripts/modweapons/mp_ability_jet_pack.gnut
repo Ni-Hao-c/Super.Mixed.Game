@@ -11,14 +11,18 @@ const float JET_PACK_BURST_VELOCITY_VERTICAL = 300 // shouldn't set this very hi
 const float JET_PACK_BURST_VELOCITY_HORIZAL = 320 // this can be bit higher
 const float JET_PACK_BURST_TO_LIFT_DELAY = 0.4 // basically no need to change this
 const float JET_PACK_LIFT_SPEED_VERTICAL = 250
-const float JET_PACK_LIFT_SPEED_HORIZAL = 250 // actually behaviors not this high, so set higher.
+const float JET_PACK_LIFT_SPEED_HORIZAL = 250 // actual behaviors not this high, so set higher.
 const float JET_PACK_GLIDE_GRAVITY_SCALE = 0.6
 const float JET_PACK_GLIDE_DURATION = 0.5
 
-const float HOVER_SOUND_DURATION = 2.2 // should relap a sound if ends
+const float HOVER_SOUND_DURATION = 2.2 // should relap a sound if ends, no need to change
 
 const int JET_PACK_AMMO_REDUCE_PER_BURST = 25
 const int JET_PACK_AMMO_REDUCE_PER_TICK = 3
+
+// for passive_jetpack! less effective since you still have tacticals normally
+const int JET_PACK_AMMO_REDUCE_PER_BURST_PASSIVE = 55
+const int JET_PACK_AMMO_REDUCE_PER_TICK_PASSIVE = 8
 
 // hardcoded cooldown think! no need to use
 const int JET_PACK_AMMO_CLIPSIZE = 200 // no need, use ammo_clip_size in settings
@@ -34,6 +38,11 @@ const float JET_PACK_LIFT_SPEED_HORIZAL_MAX = 200 // max velocity in air
 // use this function to add callback to movements
 // AddPlayerMovementEventCallback( entity player, int playerMovementEvent, void functionref( entity player ) callbackFunc )
 
+struct
+{
+    table< entity, bool > playerDoubleJumpUsedTable // for activating jet packs
+} file
+
 void function MpAbilityJetPack_Init()
 {
 #if SERVER
@@ -43,6 +52,7 @@ void function MpAbilityJetPack_Init()
     RegisterSignal( "JetPackBurst" )
     RegisterSignal( "JetPackLift" )
     RegisterSignal( "StartGlideThink" )
+    RegisterSignal( "StartFreeFallSound" )
     RegisterSignal( "ConsumeJetPackAmmo" ) // this should signal a table, but it requires file to be untyped
     /* jet pack ammo table:
         table
@@ -61,13 +71,39 @@ void function OnClientConnected( entity player )
     // using OnWeaponOwnerChanged() now, add this after player get the jet pack weapon
     //AddButtonPressedPlayerInputCallback( player, IN_JUMP, SignalJetPackStart )
     //AddPlayerMovementEventCallback( entity player, int playerMovementEvent, void functionref( entity player ) callbackFunc )
+
+    // init
+    file.playerDoubleJumpUsedTable[ player ] <- false
+}
+
+void function PlayerDoubleJumpUsed( entity player )
+{
+    thread PlayerDoubleJumpUsed_Threaded( player )
+}
+
+void function PlayerDoubleJumpUsed_Threaded( entity player )
+{
+    player.EndSignal( "OnDeath" )
+    player.EndSignal( "OnDestroy" )
+    WaitFrame() // do a wait!
+    if( !player.IsOnGround() ) // still not touch ground
+        file.playerDoubleJumpUsedTable[ player ] = true // consider double jump used, not supporting multiple jumps unfortunately
+}
+
+void function PlayerDoubleJumpRestored( entity player )
+{
+    file.playerDoubleJumpUsedTable[ player ] = false // consider double jump restored, not supporting multiple jumps unfortunately
 }
 
 void function SignalJetPackStart( entity player )
 {
     // leave checks here, valkery uses passives but I don't have that
     //print( "Player tried to signal jetpack!" )
-    if( !player.IsInputCommandHeld( IN_SPEED ) ) // for better control, use a combo to activate 
+
+    // for better control
+    //if( !player.IsInputCommandHeld( IN_SPEED ) ) // for better control, use a combo to activate 
+    //    return
+    if( !file.playerDoubleJumpUsedTable[ player ] ) // double jump not used yet!
         return
     if( player.IsPhaseShifted() ||
         player.IsWallHanging() ||
@@ -94,6 +130,23 @@ void function JetPackThink( entity player, entity weapon )
     player.EndSignal( "JetPackThinkStart" )
     player.EndSignal( "JetPackThinkEnd" )
     weapon.EndSignal( "OnDestroy" )
+    
+    file.playerDoubleJumpUsedTable[ player ] = false // always reset this
+    AddPlayerMovementEventCallback( player, ePlayerMovementEvents.DOUBLE_JUMP, PlayerDoubleJumpUsed )
+    AddPlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, PlayerDoubleJumpRestored )
+    AddButtonPressedPlayerInputCallback( player, IN_JUMP, SignalJetPackStart )
+    OnThreadEnd(
+        function():( player )
+        {
+            if( IsValid( player ) )
+            {
+                RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.DOUBLE_JUMP, PlayerDoubleJumpUsed )
+                RemovePlayerMovementEventCallback( player, ePlayerMovementEvents.TOUCH_GROUND, PlayerDoubleJumpRestored )
+                RemoveButtonPressedPlayerInputCallback( player, IN_JUMP, SignalJetPackStart )
+            }    
+        }
+    )
+
     thread JetPackAmmoThink( weapon )
     while( true )
     {
@@ -135,6 +188,8 @@ void function JetPackActivateThink( entity player, entity weapon )
                 player.DeployWeapon() // defensive fix
                 player.Server_TurnOffhandWeaponsDisabledOff() // this can turn on offhand weapons
                 thread JetPackGlideThink( player ) // do need a glide, or player will fall very fast
+                // annoying sound, no need to play
+                //thread JumpJetFreeFallSound( player )
             }
 			foreach ( effect in fx )
 			{
@@ -147,18 +202,27 @@ void function JetPackActivateThink( entity player, entity weapon )
 		}
 	)
 
-    entity fxSmokeCenter = PlayFXOnEntity( $"Rocket_Smoke_Large", player, "vent_center" )
-    //fxSmokeCenter.SetOwner( player )
-    //fxSmokeCenter.kv.VisibilityFlags = ENTITY_VISIBLE_TO_FRIENDLY | ENTITY_VISIBLE_TO_ENEMY
-    fx.append( fxSmokeCenter )
+    if( player.LookupAttachment( "vent_center" ) > 0 )
+    {
+        entity fxSmokeCenter = PlayFXOnEntity( $"Rocket_Smoke_Large", player, "vent_center" )
+        //fxSmokeCenter.SetOwner( player )
+        //fxSmokeCenter.kv.VisibilityFlags = ENTITY_VISIBLE_TO_FRIENDLY | ENTITY_VISIBLE_TO_ENEMY
+        fx.append( fxSmokeCenter )
+    }
 
-    // $"P_team_jet_hover_HLD" is good enough for both team players and owner themself
-    entity fxJetLeft = PlayFXOnEntity( $"P_team_jet_hover_HLD", player, "vent_left_back" )
-    fx.append( fxJetLeft )
+    if( player.LookupAttachment( "vent_left_back" ) > 0 )
+    {
+        // $"P_team_jet_hover_HLD" is good enough for both team players and owner themself
+        entity fxJetLeft = PlayFXOnEntity( $"P_team_jet_hover_HLD", player, "vent_left_back" )
+        fx.append( fxJetLeft )
+    }
 
-    entity fxJetRight = PlayFXOnEntity( $"P_team_jet_hover_HLD", player, "vent_right_back" )
-    fx.append( fxJetRight )
-    
+    if( player.LookupAttachment( "vent_right_back" ) > 0 )
+    {
+        entity fxJetRight = PlayFXOnEntity( $"P_team_jet_hover_HLD", player, "vent_right_back" )
+        fx.append( fxJetRight )
+    }
+        
     //entity fxJetLeftFriendly = PlayFXOnEntity( $"P_team_jet_hover_HLD", player, "vent_left_back" )
     //SetTeam( fxJetLeftFriendly, player.GetTeam() )
     //fxJetLeftFriendly.SetOwner( player )
@@ -286,7 +350,7 @@ void function JetPackGlideThink( entity player )
 {
     player.Signal( "StartGlideThink" )
     player.EndSignal( "StartGlideThink" )
-
+    
     float startTime = Time()
     player.kv.gravity = JET_PACK_GLIDE_GRAVITY_SCALE
     while( true )
@@ -303,6 +367,23 @@ void function JetPackGlideThink( entity player )
         player.kv.gravity = 0.0
 }
 
+void function JumpJetFreeFallSound( entity player )
+{
+    player.Signal( "StartFreeFallSound" )
+    player.EndSignal( "StartFreeFallSound" )
+    StopSoundOnEntity( player, "jumpjet_freefall_body_1p" )
+    EmitSoundOnEntityOnlyToPlayer( player, player, "jumpjet_freefall_body_1p" )
+    while( true )
+    {
+        if( player.IsOnGround() )
+            break
+
+        WaitFrame()
+    }
+    if( IsValid( player ) )
+        StopSoundOnEntity( player, "jumpjet_freefall_body_1p" )
+}
+
 void function JetPackAmmoThink( entity weapon )
 {
     weapon.EndSignal( "OnDestroy" )
@@ -312,7 +393,25 @@ void function JetPackAmmoThink( entity weapon )
         //float ammoReduce = expect float( result.ammoReduce )
         table result = WaitSignal( weapon, "JetPackBurst", "JetPackLift" )
         //print( "Got a signal!" )
-        int ammoReduce = result.signal == "JetPackBurst" ? JET_PACK_AMMO_REDUCE_PER_BURST : JET_PACK_AMMO_REDUCE_PER_TICK
+
+        int ammoReduce // = result.signal == "JetPackBurst" ? JET_PACK_AMMO_REDUCE_PER_BURST : JET_PACK_AMMO_REDUCE_PER_TICK
+        bool isPassiveJet = weapon.HasMod( "passive_jet_pack" ) // nerfed one!
+        bool isJetBurst = result.signal == "JetPackBurst"
+        if( isJetBurst )
+        {
+            if( isPassiveJet )
+                ammoReduce = JET_PACK_AMMO_REDUCE_PER_BURST_PASSIVE
+            else
+                ammoReduce = JET_PACK_AMMO_REDUCE_PER_BURST
+        }
+        else
+        {
+            if( isPassiveJet )
+                ammoReduce = JET_PACK_AMMO_REDUCE_PER_TICK_PASSIVE
+            else
+                ammoReduce = JET_PACK_AMMO_REDUCE_PER_TICK
+        }
+
         int currentAmmo = weapon.GetWeaponPrimaryClipCount()
         weapon.SetWeaponPrimaryClipCountAbsolute( max( 0, currentAmmo - ammoReduce ) )
     }

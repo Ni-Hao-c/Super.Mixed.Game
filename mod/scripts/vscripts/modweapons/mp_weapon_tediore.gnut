@@ -14,15 +14,18 @@ const bool USING_CUSTOM_DAMAGE = true
 // false = use reload time, true = use settings grenade fuse time
 const bool USING_CUSTOM_FUSE_TIME = true
 
-table <string, bool> playerHasThrowed = {} // prevent throw twice through wallbump
-table <entity, float> gunDamageScale = {} // testing...works pretty well till now
+struct
+{
+    table <string, bool> playerHasThrowed = {} // prevent throw twice through wallbump
+    table <entity, float> gunDamageScale = {} // testing...works pretty well till now, but respawn already had a projectile.proj.damageScale
+} file
 
-// tediore shield
-const float TEDIORE_SHIELD_DURATION_MAX = 8
-const float TEDIORE_SHIELD_DURATION_MIN = 1
-const int TEDIORE_SHIELD_HEALTH_MAX = 500
-const int TEDIORE_SHIELD_HEALTH_MIN = 100
-const float TEDIORE_SHIELD_ANGLE_LIMIT = 0.55
+// tediore deployable cover
+const float TEDIORE_COVER_DURATION_MAX = 6
+const float TEDIORE_COVER_DURATION_MIN = 1
+const int TEDIORE_COVER_HEALTH_MAX = 500
+const int TEDIORE_COVER_HEALTH_MIN = 100
+const float TEDIORE_COVER_ANGLE_LIMIT = 0.55
 
 // tediore stickybomb
 const float TEDIORE_STICKYBOMB_EXPLOSION_DELAY = 0.5
@@ -36,9 +39,9 @@ const float TEDIORE_MINE_EXPLOSION_DELAY = 0.9
 // tediore phase explosion
 const asset TEDIORE_PHASE_EXPLOSION_FX = $"P_phase_shift_main_XO"
 const string TEDIORE_PHASE_EXPLOSION_SOUND = "titan_phasedash_end_3p"
-const float TEDIORE_PHASE_DURATION_MAX = 2
-const float TEDIORE_PHASE_DURATION_MIN = 0.5
-const float PHASE_DURATION_OUTER_RADIUS_SCALE = 0.5
+const float TEDIORE_PHASE_DURATION_MAX = 2.5
+const float TEDIORE_PHASE_DURATION_MIN = 0.8
+const float PHASE_DURATION_OUTER_RADIUS_SCALE = 0.6
 const float PHASE_EXPLOSION_DELAY = 1.5
 
 // tediore chain reaction
@@ -74,8 +77,11 @@ const float DEPLOYABLE_STIM_FIELD_WAIT_INTERVAL = 0.25
 const vector DEPLOYABLE_STIM_FIELD_FRIENDLY_COLOR = < 0, 255, 0 >
 const vector DEPLOYABLE_STIM_FIELD_ENEMY_COLOR = ENEMY_COLOR_FX
 
-table < entity, array<int> > playerStimEffectTable = {} // stim effects handle
-table < entity, array<entity> > inStimFieldPlayers = {}
+// not using
+//table < entity, array<int> > playerStimEffectTable = {} // stim effects handle
+//table < entity, array<entity> > inStimFieldPlayers = {}
+
+//table< entity, int > playerActivatedStimFieldCount
 
 // tediore nessie throw
 const asset NESSIE_DRONE_MODEL = $"models/domestic/nessy_doll.mdl"
@@ -84,13 +90,24 @@ const asset NESSIE_DRONE_FX = $"P_xo_battery"
 const float NESSIE_LIFETIME_MAX = 12
 const float NESSIE_LIFETIME_MIN = 3
 
+// tediore_flesh_magnetic
+const float TEDIORE_FLESH_MAGNETIC_RANGE = 80 // lower!
+
+// tediore_pulse_blade_throw
+const float TEDIORE_PULSEBLADE_MAX_DURATION = 3.0 // scan for 3s
+const float TEDIORE_PULSEBLADE_MIN_DURATION = 0.4 // still useful
+
 void function MpWeaponMod_Tediore_Init()
 {
 #if SERVER
     RegisterSignal( "DetonateGun" )
+    // deployable cover
+    RegisterSignal( "DeployTedioreCover" )
     // deployable stim field
-    RegisterSignal( "EnterStimer" )
-    RegisterSignal( "LeaveStimer" )
+    RegisterSignal( "DeployTedioreStimer" )
+    RegisterSignal( "EnterTedioreStimer" )
+    RegisterSignal( "LeaveTedioreStimer" )
+
     AddCallback_OnClientConnected( InitPlayerStat )
     // stupid scripts... fuck it, but works well
     AddDamageCallbackSourceID( eDamageSourceId.mp_weapon_rspn101, TedioreReload_ScaleDamage )
@@ -104,8 +121,9 @@ void function MpWeaponMod_Tediore_Init()
 #if SERVER
 void function InitPlayerStat( entity player )
 {
-    playerHasThrowed[player.GetUID()] <- false
-    playerStimEffectTable[player] <- []
+    file.playerHasThrowed[player.GetUID()] <- false
+    //playerStimEffectTable[player] <- [] // not using
+    //playerActivatedStimFieldCount[player] <- 0
 }
 
 void function TedioreReload_ScaleDamage( entity victim, var damageInfo )
@@ -114,10 +132,10 @@ void function TedioreReload_ScaleDamage( entity victim, var damageInfo )
     if( !inflictor.IsProjectile() )
         return
     
-    if( inflictor in gunDamageScale )
+    if( inflictor in file.gunDamageScale )
     {
         float maxDamage = DamageInfo_GetDamage( damageInfo )
-        float actualDamage = maxDamage * gunDamageScale[inflictor]
+        float actualDamage = maxDamage * file.gunDamageScale[inflictor]
         if( actualDamage < maxDamage * MIN_DAMAGE_SCALE )
             actualDamage = maxDamage * MIN_DAMAGE_SCALE
         DamageInfo_SetDamage( damageInfo, actualDamage )
@@ -134,8 +152,10 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
     if( !owner.IsPlayer() )
         return
     string uid = owner.GetUID()
-    if( playerHasThrowed[uid] )
+    if( file.playerHasThrowed[uid] )
         return
+    owner.HolsterWeapon() // first make player unable to attack, then addMod(), deploy is done in DelayedDeployAndEnableWeapon()
+    weapon.AllowUse( false ) // re-enable is done in DelayedDeployAndEnableWeapon()
     weapon.AddMod( "tediore_effect" )
     //if( milestoneIndex != 0 )
     //    return
@@ -149,41 +169,64 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
     float clipLeftPercentage = float( clipAmmoLeft ) / float( maxClipAmmo )
     //print( "Clip Left Percentage is " + string( clipLeftPercentage ) )
 
+    // add more things from here
     bool hasModified = false
-    bool isTedioreShield = false
+    bool isTedioreCover = false
     bool isTedioreMine = false
     bool isPhaseExplosion = false
     bool isChainReaction = false
-    bool isMissileThrow = false
+    bool isMissileLaunch = false
     bool isMissileBurst = false
-    bool isBoltThrow = false
+    bool isBoltLaunch = false
     bool isStimField = false
     bool isKnifeThrow = false
+    bool isPulseBlade = false
     bool isNessieThrow = false
+    bool hasFleshMagnetic = false
     if( weapon.HasMod( "tediore_deployable_cover" ) )
-        isTedioreShield = true
+        isTedioreCover = true
     if( weapon.HasMod( "tediore_impact_mine" ) )
         isTedioreMine = true
     if( weapon.HasMod( "tediore_impact_phase_explosion" ) )
         isPhaseExplosion = true
     if( weapon.HasMod( "tediore_impact_chain_reaction" ) )
         isChainReaction = true
-    if( weapon.HasMod( "tediore_missile_throw" ) )
-        isMissileThrow = true
+    if( weapon.HasMod( "tediore_missile_launch" ) )
+        isMissileLaunch = true
     if( weapon.HasMod( "tediore_missile_burst" ) )
         isMissileBurst = true
-    if( weapon.HasMod( "tediore_bolt_throw" ) )
-        isBoltThrow = true
+    if( weapon.HasMod( "tediore_bolt_launch" ) )
+        isBoltLaunch = true
     if( weapon.HasMod( "tediore_deployable_stim_field" ) )
         isStimField = true
     if( weapon.HasMod( "tediore_knife_throw" ) )
         isKnifeThrow = true
+    if( weapon.HasMod( "tediore_pulse_blade_throw" ) )
+    {
+        isKnifeThrow = true // bind together
+        isPulseBlade = true
+    }
     if( weapon.HasMod( "tediore_nessie_throw" ) )
         isNessieThrow = true
+    if( weapon.HasMod( "tediore_flesh_magnetic" ) )
+        hasFleshMagnetic = true
     // every time there's something not using regular impact, should add it here
-    if( isTedioreShield || isTedioreMine || isPhaseExplosion || isChainReaction || isMissileThrow || isMissileBurst || isBoltThrow || isStimField || isKnifeThrow || isNessieThrow )
+    if( 
+           isTedioreCover 
+        || isTedioreMine 
+        || isPhaseExplosion 
+        || isChainReaction 
+        || isMissileLaunch 
+        || isMissileBurst 
+        || isBoltLaunch 
+        || isStimField 
+        || isKnifeThrow 
+        || isPulseBlade
+        || isNessieThrow 
+      )
         hasModified = true
 
+    // base calculations, no need to change
     local maxPilotDamage
     local minPilotDamage
     local maxTitanDamage
@@ -218,13 +261,13 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
 
     float reloadDelay = weapon.GetWeaponSettingFloat( eWeaponVar.reload_time )
     if( weapon.GetWeaponSettingBool( eWeaponVar.reload_is_segmented ) )
-        reloadDelay = weapon.GetWeaponSettingFloat( eWeaponVar.reloadempty_time ) + weapon.GetWeaponSettingFloat( eWeaponVar.reloadsegment_time_loop ) * maxClipAmmo * 0.5
+        reloadDelay = weapon.GetWeaponSettingFloat( eWeaponVar.reloadempty_time ) + weapon.GetWeaponSettingFloat( eWeaponVar.reloadsegment_time_loop ) * ( maxClipAmmo - 1 ) //* 0.5 // try to get it's full reload time
     reloadDelay *= 0.8 // since player have to redeploy weapon
     float explosionDelay
     if( USING_CUSTOM_FUSE_TIME )
     {
         explosionDelay = weapon.GetWeaponSettingFloat( eWeaponVar.grenade_fuse_time )
-        if( isMissileThrow )
+        if( isMissileLaunch )
             explosionDelay = weapon.GetWeaponSettingFloat( eWeaponVar.projectile_lifetime )
     }
     else
@@ -247,18 +290,19 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
         return
     }
 
-    thread DelayedRemoveMod( weapon )
+    // don't delay this
+    //thread DelayedRemoveMod( weapon ) 
     entity thrownGun
     // no any collisions... weird, ricochet-refire is hardcoded I think
-    if( isBoltThrow )
+    if( isBoltLaunch )
         thrownGun = weapon.FireWeaponBolt( pos, dir, 1, damageType, damageType, false, 0 )
-    else if( isMissileThrow )
+    else if( isMissileLaunch )
         thrownGun = weapon.FireWeaponMissile( pos, dir, 1, damageType, damageType, false, false )
     else
         thrownGun = weapon.FireWeaponGrenade( pos, dir, angularVelocity, 0.0, damageType, damageType, false, true, true )
     if( thrownGun )
     {
-        playerHasThrowed[uid] = true
+        file.playerHasThrowed[uid] = true
         // prevent being destroyed by other weapons, setting thrownGun.proj.onlyAllowSmartPistolDamage = true
         Grenade_Init( thrownGun, weapon )
         thrownGun.SetModel( gunModel )
@@ -267,7 +311,7 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
         // better, as we're not predicting it on client
         thread DelayedStartParticleSystem( thrownGun, fxAsset )
         thread DelayedEmitSound( owner, weapon, thrownGun )
-        if( isTedioreShield )
+        if( isTedioreCover )
         {
             vector angles = VectorToAngles( dir )
             thrownGun.proj.savedAngles = < 0, angles.y, 0 >
@@ -293,16 +337,16 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
             thrownGun.proj.savedAngles = < 0, angles.y, 0 >
             thread TedioreChainReaction( owner, thrownGun, actualPilotDamage, actualTitanDamage, explosionInnerRadius, explosionOuterRadius, impulseForce, impactFXName, damageType )
         }
-        else if( isMissileThrow )
+        else if( isMissileLaunch )
         {
             // scale it's damage, I don't have a entitystruct
-            gunDamageScale[thrownGun] <- clipLeftPercentage
+            file.gunDamageScale[thrownGun] <- clipLeftPercentage
             // random drift
             thrownGun.InitMissileForRandomDriftFromWeaponSettings( pos, dir )
         }
-        else if( isBoltThrow )
+        else if( isBoltLaunch )
         {
-            gunDamageScale[thrownGun] <- clipLeftPercentage
+            file.gunDamageScale[thrownGun] <- clipLeftPercentage
             thrownGun.kv.gravity = gravtiyScale
         }
         else if( isStimField )
@@ -313,8 +357,15 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
         }
         else if( isKnifeThrow )
         {
-            gunDamageScale[thrownGun] <- clipLeftPercentage
-            thread DelayedDestroyGun( owner, thrownGun )
+            file.gunDamageScale[thrownGun] <- clipLeftPercentage
+            float delay = 5.0 // this is only for visual!
+            if( isPulseBlade ) // pulseBalde's lifetime!
+            {
+                delay = TEDIORE_PULSEBLADE_MAX_DURATION * clipLeftPercentage
+                if( delay < TEDIORE_PULSEBLADE_MIN_DURATION )
+                    delay = TEDIORE_PULSEBLADE_MIN_DURATION
+            }
+            thread DelayedDestroyGun( owner, thrownGun, delay )
         }
         else if( isNessieThrow )
         {
@@ -326,7 +377,14 @@ void function OnWeaponReload_Tediore( entity weapon, int milestoneIndex )
             thrownGun.SetGrenadeTimer( 0 ) // so they cannot detonate themselves to deal normal damage
             thread DelayedDetonateGun( owner, thrownGun, actualPilotDamage, actualTitanDamage, explosionDelay, explosionInnerRadius, explosionOuterRadius, impulseForce, impactFXName, damageType )
         }
-        thread DelayedDeployWeapon( owner, weapon, reloadDelay )
+        if( hasFleshMagnetic )
+            GiveProjectileFakeMagnetic( thrownGun, TEDIORE_FLESH_MAGNETIC_RANGE )
+        thread DelayedDeployAndEnableWeapon( owner, weapon, reloadDelay ) // did a defensive fix, this also enableWeapon now
+
+        // remove all ammo
+        weapon.SetWeaponPrimaryClipCount( 0 )
+        // all functions done, remove mod
+        weapon.RemoveMod( "tediore_effect" )
     }
 #endif
 }
@@ -402,8 +460,8 @@ void function OnProjectileCollision_Tediore( entity projectile, vector pos, vect
         // in order to get "Planted" signal
         OnProjectileCollision_weapon_deployable( projectile, pos, normal, hitEnt, hitbox, isCritical )
     }
-    else if( mods.contains( "tediore_knife_throw" ) )
-    {
+    else if( mods.contains( "tediore_knife_throw" ) || mods.contains( "tediore_pulse_blade_throw" ) )
+    { // adding pulseBlade now!
         bool didStick = PlantStickyGrenade( projectile, pos, normal, hitEnt, hitbox )
         if ( !didStick )
             return
@@ -411,14 +469,20 @@ void function OnProjectileCollision_Tediore( entity projectile, vector pos, vect
         entity weaponOwner = projectile.GetOwner()
         if ( IsValid( weaponOwner ) && weaponOwner.IsPlayer() )
         {
-            EmitSoundOnEntityExceptToPlayer( projectile, weaponOwner, "Pilot_PulseBlade_Activated_3P" )
-            EmitSoundOnEntityOnlyToPlayer( projectile, weaponOwner, "Pilot_PulseBlade_Activated_1P" )
+            // it's good to use EmitSoundAtPosition() since pulseBlade one may be soon destroyed
+            EmitSoundAtPositionExceptToPlayer( TEAM_UNASSIGNED, projectile.GetOrigin(), weaponOwner, "Pilot_PulseBlade_Activated_3P" )
+	        EmitSoundAtPositionOnlyToPlayer( TEAM_UNASSIGNED, projectile.GetOrigin(), weaponOwner, "Pilot_PulseBlade_Activated_1P" )
+            //EmitSoundOnEntityExceptToPlayer( projectile, weaponOwner, "Pilot_PulseBlade_Activated_3P" )
+            //EmitSoundOnEntityOnlyToPlayer( projectile, weaponOwner, "Pilot_PulseBlade_Activated_1P" )
         }
         else
         {
-            EmitSoundOnEntity( projectile, "Pilot_PulseBlade_Activated_3P" )
+            EmitSoundAtPosition( TEAM_UNASSIGNED, projectile.GetOrigin(), "Pilot_PulseBlade_Activated_3P" )
+            //EmitSoundOnEntity( projectile, "Pilot_PulseBlade_Activated_3P" )
         }
-        projectile.Signal( "DetonateGun" )
+        if( mods.contains( "tediore_pulse_blade_throw" ) ) // pulseBlade will function
+            thread SonarGrenadeThink( projectile ) // modified, wasn't globalled in vanilla
+        projectile.Signal( "DetonateGun" ) // start countDown to destroy
     }
     // Normal Detonation
     else if( hitEnt.IsPlayer() || hitEnt.IsNPC() )
@@ -448,7 +512,7 @@ void function DelayedEmitSound( entity player, entity weapon, entity thrownGun )
     }
 }
 
-void function DelayedDeployWeapon( entity player, entity weapon, float delay )
+void function DelayedDeployAndEnableWeapon( entity player, entity weapon, float delay )
 {
 	player.EndSignal( "OnDeath" )
 	player.EndSignal( "OnDestroy" )
@@ -458,20 +522,24 @@ void function DelayedDeployWeapon( entity player, entity weapon, float delay )
 	OnThreadEnd(
 		function():( player, weapon, uid )
 		{
-			playerHasThrowed[uid] = false
+			file.playerHasThrowed[uid] = false
 			if( IsValid( player ) )
 			{
 				player.DeployWeapon()
 				if( IsValid( weapon ) )
-					weapon.SetWeaponPrimaryClipCount( weapon.GetWeaponPrimaryClipCountMax() )
+                {
+                    if( IsAlive( player ) ) // player needs alive to regen ammo
+					    weapon.SetWeaponPrimaryClipCount( weapon.GetWeaponPrimaryClipCountMax() )
+                    weapon.AllowUse( true )
+                }
 			}
 		}
 	)
 	
-	player.HolsterWeapon() // defensive fix
 	while( startTime + delay >= Time() )
     {
-		player.HolsterWeapon()
+		player.HolsterWeapon() // defensive fix
+        //weapon.SetWeaponPrimaryClipCount( 0 ) // don't do this, weapon will miss deploy animation
 		WaitFrame()
     }
 }
@@ -496,7 +564,12 @@ void function DelayedDetonateGun( entity player, entity thrownGun, actualPilotDa
 
 void function TedioreGunExplode( entity thrownGun, actualPilotDamage, actualTitanDamage, float explosionInnerRadius, float explosionOuterRadius, float impulseForce, string impactFXName, int damageType )
 {
-    if( impactFXName != "" )
+    if( impactFXName == "exp_frag_grenade" ) // fuck frag sounds
+    {
+        PlayFX( $"P_impact_exp_FRAG_air" ,thrownGun.GetOrigin(), < 0,0,0 > )
+	    EmitSoundAtPosition( TEAM_UNASSIGNED, thrownGun.GetOrigin(), "explo_fraggrenade_impact_3p_int" )
+    }
+    else if( impactFXName != "" )
         PlayImpactFXTable( thrownGun.GetOrigin(), thrownGun, impactFXName )
     RadiusDamage(
         thrownGun.GetOrigin() + thrownGun.proj.savedOrigin,						// center
@@ -610,19 +683,25 @@ void function OnTedioreCoverPlanted( entity projectile, float powerScale )
 			surfaceAngles = AnglesOnSurface( traceResult.surfaceNormal, forward )
 
 			vector newUpDir = AnglesToUp( surfaceAngles )
-			if ( DotProduct( newUpDir, oldUpDir ) < TEDIORE_SHIELD_ANGLE_LIMIT )
+			if ( DotProduct( newUpDir, oldUpDir ) < TEDIORE_COVER_ANGLE_LIMIT )
 				surfaceAngles = projectile.proj.savedAngles
 		}
 
 		projectile.SetAngles( surfaceAngles )
 
-        float lifeTime = TEDIORE_SHIELD_DURATION_MAX * powerScale
-        if( lifeTime < TEDIORE_SHIELD_DURATION_MIN )
-            lifeTime = TEDIORE_SHIELD_DURATION_MIN
-        int health = int( TEDIORE_SHIELD_HEALTH_MAX * powerScale )
-        if( health < TEDIORE_SHIELD_HEALTH_MIN )
-            health = TEDIORE_SHIELD_HEALTH_MIN
+        float lifeTime = TEDIORE_COVER_DURATION_MAX * powerScale
+        if( lifeTime < TEDIORE_COVER_DURATION_MIN )
+            lifeTime = TEDIORE_COVER_DURATION_MIN
+        int health = int( TEDIORE_COVER_HEALTH_MAX * powerScale )
+        if( health < TEDIORE_COVER_HEALTH_MIN )
+            health = TEDIORE_COVER_HEALTH_MIN
 
+        entity owner = projectile.GetOwner()
+        if( IsValid( owner ) )
+        {
+            owner.Signal( "DeployTedioreCover" )
+            owner.EndSignal( "DeployTedioreCover" ) // multiple cover is not allowed
+        }
 		DeployCover( projectile, origin, surfaceAngles, lifeTime, health )
 	#endif
 }
@@ -914,7 +993,7 @@ void function TedioreChainReaction( entity owner, entity thrownGun, actualPilotD
         surfaceAngles = AnglesOnSurface( traceResult.surfaceNormal, forward )
 
         vector newUpDir = AnglesToUp( surfaceAngles )
-        if ( DotProduct( newUpDir, oldUpDir ) < TEDIORE_SHIELD_ANGLE_LIMIT )
+        if ( DotProduct( newUpDir, oldUpDir ) < TEDIORE_COVER_ANGLE_LIMIT )
             surfaceAngles = thrownGun.proj.savedAngles
     }
 
@@ -924,8 +1003,9 @@ void function TedioreChainReaction( entity owner, entity thrownGun, actualPilotD
     vector startVector = VectorToAngles( thrownGun.GetForwardVector() ) // thrownGun.GetForwardVector()
     float rotatePerGrenade = 360 / float( grenadeCount )
     float explosionInterval = totalTime / grenadeCount
-	if( explosionInterval < 0.1 ) // lowest should be 0.1
-		explosionInterval = 0.1
+    // really not good!
+	//if( explosionInterval < 0.1 ) // lowest should be 0.1
+	//	explosionInterval = 0.1
 
     array<entity> grenadeProps
     for( int i = 0; i < grenadeCount; i++ )
@@ -989,11 +1069,12 @@ void function TedioreMissileBurst( entity weapon, entity player, int damageType,
     asset gunModel = weapon.GetWeaponInfoFileKeyFieldAsset( "playermodel" )
 
     float shotsInterval = 1 / weapon.GetWeaponSettingFloat( eWeaponVar.fire_rate )
-	if( shotsInterval < 0.1 ) // lowest should be 0.1
-		shotsInterval = 0.1
+    // really not good!!
+	//if( shotsInterval < 0.1 ) // lowest should be 0.1
+	//	shotsInterval = 0.1
     int burstCount = weapon.GetWeaponSettingInt( eWeaponVar.burst_fire_count )
     reloadDelay += burstCount * shotsInterval
-    thread DelayedDeployWeapon( player, weapon, reloadDelay )
+    thread DelayedDeployAndEnableWeapon( player, weapon, reloadDelay )
 
     OnThreadEnd(
         function() : ( weapon )
@@ -1016,11 +1097,11 @@ void function TedioreMissileBurst( entity weapon, entity player, int damageType,
         {
             if( thrownGun )
             {
-                playerHasThrowed[uid] = true
+                file.playerHasThrowed[uid] = true
                 thrownGun.SetModel( gunModel )
                 thread DelayedStartParticleSystem( thrownGun, fxAsset )
                 thread DelayedEmitSound( player, weapon, thrownGun )
-                gunDamageScale[thrownGun] <- clipLeftPercentage
+                file.gunDamageScale[thrownGun] <- clipLeftPercentage
                 thrownGun.InitMissileForRandomDriftFromWeaponSettings( pos, dir )
             }
         }
@@ -1060,6 +1141,7 @@ void function CreateStimBeacon( entity owner, vector origin, vector angles, asse
 	entity tower = CreatePropScript( gunModel, origin, angles, 2 )
 	// tower.EnableAttackableByAI( 10, 0, AI_AP_FLAG_NONE )
 	SetTeam( tower, owner.GetTeam() )
+    tower.SetBossPlayer( owner ) // really need this
 	tower.SetMaxHealth( health )
 	tower.SetHealth( health )
 	tower.SetTakeDamageType( DAMAGE_YES )
@@ -1183,6 +1265,14 @@ void function StimBeaconThink( entity tower, float radius, float height )
 
 void function StimerThink( entity stimer, float radius, float height )
 {
+    entity owner = stimer.GetBossPlayer()
+    if( IsValid( owner ) )
+    { // owner's signals
+        owner.EndSignal( "OnDeath" )
+        owner.EndSignal( "OnDestroy" )
+        owner.Signal( "DeployTedioreStimer" ) // multiple stimer is not allowed
+        owner.EndSignal( "DeployTedioreStimer" )
+    }
 	stimer.EndSignal( "OnDestroy" )
 	entity trigger = CreateTriggerRadiusMultiple( stimer.GetOrigin(), radius, [], TRIG_FLAG_PLAYERONLY | TRIG_FLAG_NO_PHASE_SHIFT, height, -height )
 	SetTeam( trigger, stimer.GetTeam() )
@@ -1208,6 +1298,7 @@ void function OnStimerTriggerEnter( entity trigger, entity player )
     if( player.GetTeam() != trigger.GetTeam() )
         return
 
+    //playerActivatedStimFieldCount[player] += 1
     float severity = DEPLOYABLE_STIM_FIELD_EFFECT_SEVERITY
     thread StimerStimThink( player, severity, DEPLOYABLE_STIM_FIELD_DURATION_MIN )
 }
@@ -1217,8 +1308,9 @@ void function OnStimerTriggerLeave( entity trigger, entity player )
     if( player.GetTeam() != trigger.GetTeam() )
         return
 
+    //playerActivatedStimFieldCount[player] -= 1
     //print( "leaving trigger!" )
-    player.Signal( "LeaveStimer" )
+    player.Signal( "LeaveTedioreStimer" )
 }
 
 void function StimerStimThink( entity player, float severity, float leaveDuration )
@@ -1234,10 +1326,10 @@ void function StimerStimThink( entity player, float severity, float leaveDuratio
     EmitSoundOnEntityOnlyToPlayer( player, player, "pilot_stimpack_activate_1P" )
 	EmitSoundOnEntityExceptToPlayer( player, player, "pilot_stimpack_activate_3P" )
 
-    player.Signal( "EnterStimer" )
+    //player.Signal( "EnterTedioreStimer" )
     player.EndSignal( "OnDeath" )
     player.EndSignal( "OnDestroy" )
-    player.EndSignal( "EnterStimer" )
+    //player.EndSignal( "EnterTedioreStimer" ) // maybe no need to EndSignal this? player can enter multiple stimers
     int speedBoostHandle = StatusEffect_AddEndless( player, eStatusEffect.speed_boost, severity )
     int stimVisualHandle = StatusEffect_AddEndless( player, eStatusEffect.stim_visual_effect, severity )
     
@@ -1260,7 +1352,7 @@ void function StimerStimThink( entity player, float severity, float leaveDuratio
                 EffectStop( stimFX )
         }
     )
-    player.WaitSignal( "LeaveStimer" )
+    player.WaitSignal( "LeaveTedioreStimer" )
 
     if( leaveDuration == 2 )
     {
@@ -1558,13 +1650,14 @@ void function OnBeaconDamaged( entity tower, var damageInfo )
 }
 
 // tediore_knife_throw
-void function DelayedDestroyGun( entity player, entity thrownGun )
+// and tediore_pulse_blade_throw
+void function DelayedDestroyGun( entity player, entity thrownGun, float delay )
 {
     player.EndSignal( "OnDestroy" )
     thrownGun.EndSignal( "OnDestroy" )
     thrownGun.WaitSignal( "DetonateGun" )
 
-    wait 5
+    wait delay
     if( IsValid( thrownGun ) )
         thrownGun.GrenadeExplode( < 0,0,0 > )
 }
