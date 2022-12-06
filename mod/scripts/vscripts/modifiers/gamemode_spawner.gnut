@@ -209,16 +209,16 @@ void function HandleNPCTitanNameVisibility( entity titan )
 
 const array<string> RANDOM_NOTIFICATIONS =
 [
-	"Friendly fire is on, and killing teammates will also gain points, feel free to do anything :(",
+	"Friendly fire is on, and you can only earn points by killing teammates, feel free to do anything :(",
 	"You can embark any auto-titans, empty npc titans will not showing health bars.",
 	"Bullets can normally deal damage to titan armors.",
 	"No need to have that willing to win, I can't control this mode even :(",
-	"Batteries protects your battery panel from being attacked, but riders can rip all your batteries down to deal damage.",
+	"Batteries protects your battery panel from being attacked, but riders can also rip all your batteries down to deal damage.",
 	"If your rodeo target having multiple batteries, you'll have to remove all of them before shooting the panel.",
 	"After wipe out your target's batteries, you can directly shoot their battery panel, press MELEE to throw a grenade inside.",
 	"Prime titans are replaced by some... not-that-funny titans?",
 	"No need to care too much of marvins, they won't shoot you at all. Trust me.",
-	"After climbing to the top of any titan, press USE to apply your current battery, or press MELEE to damage them."
+	"After climbing to the top of any titan, press USE to apply your current battery, or press MELEE to remove theirs."
 ]
 
 void function RandomNotificationOnRespawn( entity player )
