@@ -21,6 +21,10 @@
 
 	"global"
 	{
+		class				"pilot"
+		//weaponClass		"human"
+		//subclass			"wallrun"
+
 		printname			"#NPC_TITAN_AUTO_STRYDER_SWORD"
 
 		bodymodel			"models/titans/light/titan_light_locust.mdl" [$mp]
@@ -30,15 +34,6 @@
 
 		powerregenrate		10
 	    dodgePowerDrain		50
-
-		sharedEnergyTotal 1000
-		sharedEnergyRegenDelay 0.2
-		sharedEnergyRegenRate						100.0 	[$sp]
-		sharedEnergyRegenRate						80.0 	[$mp]
-		grapple_power_regen_rate					4
-
-		sharedEnergyNotUsableSound "LSTAR_LowAmmo_Shot15"
-		sharedEnergyRegenSound ""
 
 		    footstep_type			"ronin"
 
