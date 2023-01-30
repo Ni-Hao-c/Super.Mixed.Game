@@ -100,31 +100,31 @@ void function TryUseShieldBattery_Threaded( entity player )
             {
 				if( expect bool( player.s.searchingSheildBattery ) )
 					return
-                SendHudMessage( player, "未持有电池, 尝试使用强化卡...", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
+                SendHudMessage( player, "Not carrying a battery\nTry using boosts...", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
                 waitthread WaitForPlayerGetBatteryFromBoost( player )
                 wait 0.1 // defensive fix for script to get batteryOnBack
                 battery = GetBatteryOnBack( player ) // done use boost, check battery again
                 if( !IsValid( battery ) )
                 {
-                    SendHudMessage( player, "获取电池失败!", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
+                    SendHudMessage( player, "Failed to get a battery!", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
                     return
                 }
             }
             else
             {
-                SendHudMessage( player, "未持有电池", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
+                SendHudMessage( player, "Not carrying a battery", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
                 return
             }
         }
         else
         {
-            SendHudMessage( player, "未持有电池", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
+            SendHudMessage( player, "Not carrying a battery", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
             return
         }
     }
     if( !file.noLimitBattery && ( player.GetShieldHealthMax() < 1 || player.GetShieldHealth() == player.GetShieldHealthMax() ) )
     {
-        SendHudMessage( player, "护盾已满", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
+        SendHudMessage( player, "Shields full", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
         if( file.shieldBatteryOverwritesBoost )
         { // re-deploy weapon if shield is full
             player.HolsterWeapon()
@@ -175,7 +175,7 @@ void function TryUseShieldBattery_Threaded( entity player )
                         Rodeo_PilotPicksUpBattery( player, battery )
                     else
                         Rodeo_PilotPicksUpBattery( player, newestBattery )
-                    SendHudMessage( player, "取消使用护盾电池", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
+                    SendHudMessage( player, "Shield battery cancelled", -1, -0.3, 255, 255, 100, 255, 0, 1, 0 )
                 }
             }
             else
@@ -202,7 +202,7 @@ void function TryUseShieldBattery_Threaded( entity player )
 
     player.HolsterWeapon()
     player.Server_TurnOffhandWeaponsDisabledOn()
-	SendHudMessage( player, "正在取出护盾电池\n(按下开火以取消)", -1, -0.3, 255, 255, 100, 255, 0, 1.0, 0 )
+	SendHudMessage( player, "Pulling out a shield battery\n(Press FIRE to cancel)", -1, -0.3, 255, 255, 100, 255, 0, 1.0, 0 )
     wait 0.6 // wait for player hoster their weapon
     battery.ClearParent()
     battery.SetParent( player, "PROPGUN" )
@@ -216,9 +216,9 @@ void function TryUseShieldBattery_Threaded( entity player )
         player.HolsterWeapon() // defensive fix
         player.Server_TurnOffhandWeaponsDisabledOn()
         if( isAmped )
-            SendHudMessage( player, "正在使用强力护盾电池 [ " + CreateHudProgressBarThroughTime( Time(), startTime, useTime ) + " ]\n(按下开火以取消)", -1, -0.3, 255, 255, 100, 255, 0, 0.2, 0 )
+            SendHudMessage( player, "Using an amped shield battery [ " + CreateHudProgressBarThroughTime( Time(), startTime, useTime ) + " ]\n(Press FIRE to cancel)", -1, -0.3, 255, 255, 100, 255, 0, 0.2, 0 )
         else
-            SendHudMessage( player, "正在使用护盾电池 [ " + CreateHudProgressBarThroughTime( Time(), startTime, useTime ) + " ]\n(按下开火以取消)", -1, -0.3, 255, 255, 100, 255, 0, 0.2, 0 )
+            SendHudMessage( player, "Using a shield battery [ " + CreateHudProgressBarThroughTime( Time(), startTime, useTime ) + " ]\n(Press FIRE to cancel)", -1, -0.3, 255, 255, 100, 255, 0, 0.2, 0 )
         WaitFrame()
     }
 
@@ -248,7 +248,7 @@ void function TryUseShieldBattery_Threaded( entity player )
     if( shieldToRestore <= file.batteryRegenAmount ) // consider shield is full, not showing a extra fx
         shieldFXHandle.kv.VisibilityFlags = ENTITY_VISIBLE_TO_ENEMY | ENTITY_VISIBLE_TO_FRIENDLY
 
-    SendHudMessage( player, "已回复" + string(shieldToRestore) + "点护盾! ", -1, -0.3, 255, 255, 100, 255, 0, 2, 0 )
+    SendHudMessage( player, "Restoring: " + string(shieldToRestore) + " shields! ", -1, -0.3, 255, 255, 100, 255, 0, 2, 0 )
 
     MessageToPlayer( player, eEventNotifications.Rodeo_PilotAppliedBatteryToYou, player, isAmped )
 

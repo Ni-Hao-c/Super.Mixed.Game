@@ -88,10 +88,10 @@ struct
 
 void function Modded_Gamemode_Bleedout_Init()
 {
+	if ( GetCurrentPlaylistVarInt( "modded_bleedout", 0 ) == 0 )
+		return
     PrecacheParticleSystem( $"death_pinkmist_LG_nochunk" )
 	PrecacheParticleSystem( $"xo_damage_exp_2" )
-
-    Rodeo_SetBatterySkinRandom( false ) // from _rodeo_titan.gnut
 	
     Bleedout_EnableExecutingBleedingPlayer( true ) // funny
 	//Bleedout_SetIncapShieldInvulnerable( true ) // op
@@ -100,15 +100,10 @@ void function Modded_Gamemode_Bleedout_Init()
 	Bleedout_SetBleedoutDofEnabled( false ) // disables annoying dof
 	Bleedout_SetDownedGracePeriodEnabled( false ) // disable annoying sound
 
-    //SetSyncedMeleeNoLimit( true ) // so you can execute anywhere
+	MeleeSyncedNPC_EnableAll_Init() // if you choose...
 	Melee_AlwaysDoRandomSyncedMelee( true ) // funny modifier
-    //Rodeo_SetBatteryThrowEnabled( true ) // messed up
 	
     SetBurnCardAllBattery( true ) // from _burnmeter.gnut
-	
-    SetAltPilotChance( 2 ) // higher chance to change model, 50%
-    //SetShouldAlsoFuckOffPOV( false ) // for something
-    SetShouldFUCKOFFCLOAK( true ) // fuck them
 	
     SetPlayerDeathsHidden( true ) // no sounds for deaths, and won't count deaths by default
     SetWeaponDropsEnabled( false ) // bleedout uses USE so much, don't let players drop weapons
@@ -121,8 +116,8 @@ void function Modded_Gamemode_Bleedout_Init()
     SetShieldBatteryRegenAmount( BLEEDOUT_MODE_SHIELD_BATTERY_REGEN_AMOUNT, BLEEDOUT_MODE_AMPED_SHIELD_BATTERY_REGEN_AMOUNT )
 
     // don't make the intro annoying
-    SetWaitingForPlayersMaxDuration( 10.0 )
     ClassicMP_SetLevelIntro( ClassicMP_ShorterDropshipIntro_Setup, DROPSHIP_INTRO_LENGTH_SHORTER )
+	ClassicMP_ForceDisableEpilogue( true ) // temp
 
     Bleedout_AddCallback_OnPlayerStartBleedout( BleedoutMode_OnPlayerDowned )
     Bleedout_AddCallback_OnPlayerGiveFirstAid( BleedoutMode_OnPlayerRevived )
@@ -356,7 +351,7 @@ void function OnExecutionDamaged( entity victim, var damageInfo )
         if( shieldToRestore <= BLEEDOUT_MODE_EXECUTION_SHIELD_REWARD ) // consider shield is full, not showing a extra fx
             shieldFXHandle.kv.VisibilityFlags = ENTITY_VISIBLE_TO_ENEMY | ENTITY_VISIBLE_TO_FRIENDLY
         attacker.SetShieldHealth( min( attacker.GetShieldHealthMax(), attacker.GetShieldHealth() + shieldToRestore ) )
-        SendHudMessage( attacker, "处决一名敌人, 已回复" + string(shieldToRestore) + "点护盾! ", -1, -0.3, 0, 255, 255, 255, 0, 2, 0 )
+        SendHudMessage( attacker, "Executing an enemy\nRestored: " + string(shieldToRestore) + " shields!", -1, -0.3, 0, 255, 255, 255, 0, 2, 0 )
         MessageToPlayer( attacker, eEventNotifications.VANGUARD_ShieldGain, attacker )
 
 		//AddPlayerScore( attacker, "Execution", victim ) // do a manual score event here
@@ -375,7 +370,7 @@ bool function OnTouchBatteryPack( entity player, entity batteryPack )
         //print( GetPlayerLastShieldBatteryUsedTime( player ) >= Time() - 1.0 )    
         return false
     }
-    SendHudMessage( player, "按 强化 按键\n使用护盾电池", -1, -0.3, 0, 255, 255, 255, 0, 2, 0 )
+    SendHudMessage( player, "Press BOOST key\nTo use a shield battery", -1, -0.3, 0, 255, 255, 255, 0, 2, 0 )
 
     //Basically always return false since we don't want the battery pack to go away when being touched. ApplyBatteryToTitan() etc will deal with lifetime of battery
 	return false
@@ -447,7 +442,7 @@ void function BleedoutMode_OnPlayerRevived( entity playerToRes, entity playerHea
     if( shieldToRestore <= BLEEDOUT_MODE_REVIVING_FRIENDLY_SHIELD_REWARD ) // consider shield is full, not showing a extra fx
         shieldFXHandle.kv.VisibilityFlags = ENTITY_VISIBLE_TO_ENEMY | ENTITY_VISIBLE_TO_FRIENDLY
     playerHealer.SetShieldHealth( min( playerHealer.GetShieldHealthMax(), playerHealer.GetShieldHealth() + shieldToRestore ) )
-    SendHudMessage( playerHealer, "复活一名队友, 已回复" + string(shieldToRestore) + "点护盾! ", -1, -0.3, 0, 255, 255, 255, 0, 2, 0 )
+    SendHudMessage( playerHealer, "Reviving a teammate\nResotred: " + string(shieldToRestore) + " shields!", -1, -0.3, 0, 255, 255, 255, 0, 2, 0 )
     MessageToPlayer( playerHealer, eEventNotifications.VANGUARD_ShieldGain, playerHealer )
 }
 
@@ -709,7 +704,7 @@ void function Bleedout_PlayerDownedObit( entity ent, entity attacker, var damage
 		if( attacker.IsPlayer() && ent.IsPlayer() )
 		{
 			//NSSendPopUpMessageToPlayer( attacker, "擊倒 " + ent.GetPlayerName() )
-			NSSendPopUpMessageToPlayer( ent, "被 " + attacker.GetPlayerName() + " 擊倒" )
+			NSSendPopUpMessageToPlayer( ent, "Downed by " + attacker.GetPlayerName() )
 		}
 	}
 }
