@@ -88,8 +88,6 @@ struct
 
 void function Modded_Gamemode_Bleedout_Init()
 {
-	if ( GetCurrentPlaylistVarInt( "modded_bleedout", 0 ) == 0 )
-		return
     PrecacheParticleSystem( $"death_pinkmist_LG_nochunk" )
 	PrecacheParticleSystem( $"xo_damage_exp_2" )
 	
