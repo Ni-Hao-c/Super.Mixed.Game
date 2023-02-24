@@ -953,6 +953,13 @@
 			"ServerCallback": {
                 "After": "MeleeSyncedNoLimit_Init"
             }
+		},
+		{
+			"Path": "/leech/_leech_super_spectre.gnut",
+			"RunOn": "SERVER && MP",
+			"ServerCallback": {
+                "After": "Leech_Super_Spectre_init"
+            }
 		}
 	]
 }

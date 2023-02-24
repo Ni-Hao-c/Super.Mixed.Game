@@ -6,6 +6,11 @@ global function LeechPropagate
 global function ReleaseLeechOverflow
 global function IsBeingLeeched
 
+global function AddCallback_LeechAnimation
+global function AddCallback_LeechExitAnimation
+global function Animate_PlayerLeechTarget
+global function TryAddSpectreHackingSoundEvent
+
 // 384	~ 32 feet
 // 256	~ 21.3 feet
 // 192	~ 16 feet
@@ -21,6 +26,12 @@ const int GLOBAL_LEECH_LIMIT 		= 8
 const int MAX_LEECHABLE 			= 4
 const bool PROPAGATE_ON_LEECH 		= false
 #endif
+
+struct
+{
+	table< string, void functionref( entity, entity, LeechActionInfo, LeechData ) > leechAnimationCallbacks
+	table< string, void functionref( entity, entity, LeechActionInfo, LeechData ) > leechExitAnimationCallbacks
+} file
 
 void function PlayerLeeching_Init()
 {
@@ -40,6 +51,22 @@ void function EnableGroundExecutiongLifeLong()
 			npc.SetUsableByGroup( "enemies pilot" )
 		}
 	}
+}
+
+void function AddCallback_LeechAnimation( string className, void functionref( entity, entity, LeechActionInfo, LeechData ) callbackFunc )
+{
+	if ( !( className in file.leechAnimationCallbacks ) )
+		file.leechAnimationCallbacks[ className ] <- callbackFunc
+	else
+		file.leechAnimationCallbacks[ className ] = callbackFunc
+}
+
+void function AddCallback_LeechExitAnimation( string className, void functionref( entity, entity, LeechActionInfo, LeechData ) callbackFunc )
+{
+	if ( !( className in file.leechExitAnimationCallbacks ) )
+		file.leechExitAnimationCallbacks[ className ] <- callbackFunc
+	else
+		file.leechExitAnimationCallbacks[ className ] = callbackFunc
 }
 
 void function PlayerStopLeeching( entity player, entity target )
@@ -189,10 +216,15 @@ void function LeechStartThread( entity player, entity target )
 	if ( IsSpectre( target ) )
 		TellSquadmatesSpectreIsGettingLeeched( target, player )
 
-	waitthread PlayerLeechTargetAnimation( player, target, action, e )
+	string className = target.GetClassName()
+	print( "className in file.leechAnimationCallbacks: " + string( className in file.leechAnimationCallbacks ) )
+	if ( className in file.leechAnimationCallbacks )
+		waitthread file.leechAnimationCallbacks[ className ]( player, target, action, e )
+	else
+		waitthread PlayerLeechTargetAnimation( player, target, action, e )
 
 	e.leechStartTime = Time()
-	//Remote_CallFunction_Replay( player, "ServerCallback_DataKnifeStartLeech", e.leechTime )
+	Remote_CallFunction_Replay( player, "ServerCallback_DataKnifeStartLeech", e.leechTime )
 	waitthread WaittillFinishedLeeching( player, target, e )
 
 	if ( e.success  )
@@ -213,11 +245,14 @@ void function LeechStartThread( entity player, entity target )
 	else
 	{
 		DataKnifeCanceledSounds( player )
-		//Remote_CallFunction_Replay( player, "ServerCallback_DataKnifeCancelLeech" )
+		Remote_CallFunction_Replay( player, "ServerCallback_DataKnifeCancelLeech" )
 		PlayerStopLeeching( player, player.p.leechTarget )
 	}
 
-	waitthread PlayerExitLeechingAnim( player, target, action, e )
+	if ( className in file.leechExitAnimationCallbacks )
+		waitthread file.leechExitAnimationCallbacks[ className ]( player, target, action, e )
+	else
+		waitthread PlayerExitLeechingAnim( player, target, action, e )
 }
 
 void function TellSquadmatesSpectreIsGettingLeeched( entity spectre, entity player )
@@ -449,20 +484,7 @@ void function PlayerLeechTargetAnimation( entity player, entity target, LeechAct
 
 	entity viewmodel = player.GetFirstPersonProxy()
 
-	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt1" ) )
-			AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt1", PlaySound_DataKnife_Hack_Spectre_Pt1 )
-
-	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt2" ) )
-			AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt2", PlaySound_DataKnife_Hack_Spectre_Pt2 )
-
-	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt3" ) )
-			AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt3", PlaySound_DataKnife_Hack_Spectre_Pt3 )
-
-	if ( !HasAnimEvent( viewmodel, "PlaySound_Spectre_Servo_Heavy_Short" ) )
-			AddAnimEvent( viewmodel, "PlaySound_Spectre_Servo_Heavy_Short", PlaySound_Spectre_Servo_Heavy_Short )
-
-	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_ArmorRattle" ) )
-			AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_ArmorRattle", PlaySound_DataKnife_Hack_Spectre_ArmorRattle )
+	TryAddSpectreHackingSoundEvent( viewmodel )
 
 	if ( haveTargetSequence )
 	{
@@ -493,10 +515,7 @@ void function PlayerLeechTargetAnimation( entity player, entity target, LeechAct
 	if ( haveTargetSequence )
 		thread Animate_PlayerLeechTarget( targetSequence, target, ref )
 
-	float duration = player.GetSequenceDuration( playerSequence.thirdPersonAnim ) + player.GetSequenceDuration( playerSequence.thirdPersonAnimIdle )
-	//waitthread FirstPersonSequence( playerSequence, player, null )
-	thread FirstPersonSequence( playerSequence, player, target )
-	wait duration
+	waitthread FirstPersonSequence( playerSequence, player, null )
 }
 
 
@@ -573,6 +592,24 @@ void function PlayerExitLeechingAnim( entity player, entity target, LeechActionI
 bool function IsBeingLeeched( entity npc )
 {
 	return npc.ai.leechInProgress
+}
+
+void function TryAddSpectreHackingSoundEvent( entity viewmodel )
+{
+	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt1" ) )
+		AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt1", PlaySound_DataKnife_Hack_Spectre_Pt1 )
+
+	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt2" ) )
+		AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt2", PlaySound_DataKnife_Hack_Spectre_Pt2 )
+
+	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt3" ) )
+		AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_Pt3", PlaySound_DataKnife_Hack_Spectre_Pt3 )
+
+	if ( !HasAnimEvent( viewmodel, "PlaySound_Spectre_Servo_Heavy_Short" ) )
+		AddAnimEvent( viewmodel, "PlaySound_Spectre_Servo_Heavy_Short", PlaySound_Spectre_Servo_Heavy_Short )
+
+	if ( !HasAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_ArmorRattle" ) )
+		AddAnimEvent( viewmodel, "PlaySound_DataKnife_Hack_Spectre_ArmorRattle", PlaySound_DataKnife_Hack_Spectre_ArmorRattle )
 }
 
 void function PlaySound_DataKnife_Hack_Spectre_Pt1( entity playerFirstPersonProxy  )

@@ -1,0 +1,129 @@
+global function Leech_Super_Spectre_init
+
+void function Leech_Super_Spectre_init()
+{
+    AddCallback_LeechAnimation( "npc_super_spectre", SuperSpectreLeechAnimation )
+    AddCallback_LeechExitAnimation( "npc_super_spectre", SuperSpectreLeechExitAnimation )
+}
+
+void function SuperSpectreLeechAnimation( entity player, entity target, LeechActionInfo action, LeechData e )
+{
+    Assert( action.isValid )
+	vector targetStartOrg = target.GetOrigin()
+	vector targetStartAng = target.GetAngles()
+
+	vector initialPlayerPosition = player.GetOrigin()
+	vector initialTargetPosition = target.GetOrigin()
+
+	vector endOrigin = target.GetOrigin()
+	vector startOrigin = player.GetOrigin()
+	vector refVec = endOrigin - startOrigin
+	string animTag
+
+	//---------------------------------------------------------
+	// Leech anims played on the leech target, or at player position?
+	//---------------------------------------------------------
+    e.ref = CreateExpensiveScriptMover()
+    //e.ref.SetModel( $"models/weapons/bullets/triple_threat_projectile.mdl" )
+    e.ref.SetParent( target, "RIDE" ) // the proper attachment
+    e.ref.SetOrigin( < -15, 25, -26 > ) // mix the ref close to spectre's back
+
+	e.ref.EndSignal( "OnDestroy" )
+
+	//-----------------------------------------------------------------
+	// Player FirstPersonSequence for the leeching
+	//-----------------------------------------------------------------
+    FirstPersonSequenceStruct playerSequence
+	playerSequence.blendTime = 0.25
+	playerSequence.attachment = "ref"
+
+	playerSequence.thirdPersonAnim = "pt_data_knife_spectre_leech_start" //"pt_data_knife_drone_start"
+	playerSequence.thirdPersonAnimIdle = "pt_data_knife_spectre_leech_idle" //"pt_data_knife_drone_idle"
+	playerSequence.firstPersonAnim = "ptpov_data_knife_spectre_leech_start" //"ptpov_data_knife_drone_start"
+	playerSequence.firstPersonAnimIdle = "ptpov_data_knife_spectre_leech_idle" //"ptpov_data_knife_drone_idle"
+    //playerSequence.playerPushable = false
+    //playerSequence.noParent = false // reaper leeching should parent player
+
+    //-----------------------------------------------------------------
+	// Target Sequence for the leeching
+	//-----------------------------------------------------------------
+    FirstPersonSequenceStruct targetSequence
+    targetSequence.blendTime = 0.25
+	targetSequence.attachment = "ref"
+    targetSequence.thirdPersonAnim = "sspec_attack_powerdown_start"
+	targetSequence.thirdPersonAnimIdle = "sspec_attack_powerdown_idle"
+
+	entity viewmodel = player.GetFirstPersonProxy()
+
+    TryAddSpectreHackingSoundEvent( viewmodel )
+
+	//-----------------------------------
+	// Data knife
+	//-----------------------------------
+	asset model = DATA_KNIFE_MODEL
+    string knifeTag = "PROPGUN"
+
+    entity firstPersonKnife = CreatePropDynamic( model )
+	SetTargetName( firstPersonKnife, "firstPersonKnife" )
+	firstPersonKnife.SetParent( viewmodel, knifeTag, false, 0.0 )
+
+	entity thirdPersonKnife = CreatePropDynamic( model )
+	SetTargetName( thirdPersonKnife, "thirdPersonKnife" )
+	thirdPersonKnife.SetParent( player, knifeTag, false, 0.0 )
+	e.knives.append( thirdPersonKnife )
+
+	SetForceDrawWhileParented( target, true )
+
+	//------------------------------------------------------------------------------
+	// Play leech anim sequence for player, but only for target if leech anims exist
+	//-------------------------------------------------------------------------------
+	player.SetSyncedEntity( target )
+
+	entity ref = e.ref
+	//thread Animate_PlayerLeechTarget( targetSequence, target, null )
+    thread FirstPersonSequence( targetSequence, target, null )
+
+	//float duration = player.GetSequenceDuration( playerSequence.thirdPersonAnim ) + player.GetSequenceDuration( playerSequence.thirdPersonAnimIdle )
+	//player.SetParent( ref )
+    waitthread FirstPersonSequence( playerSequence, player, ref )
+	//thread FirstPersonSequence( playerSequence, player, target )
+	//wait duration
+}
+
+void function SuperSpectreLeechExitAnimation( entity player, entity target, LeechActionInfo action, LeechData e )
+{
+    //-------------------------------------------------------------
+	// Player Sequence
+	//-------------------------------------------------------------
+    FirstPersonSequenceStruct playerSequence
+	playerSequence.blendTime = 0.3
+	playerSequence.attachment = "ref"
+	playerSequence.teleport = false
+	//playerSequence.noParent = false
+	//playerSequence.playerPushable = false
+    
+	playerSequence.thirdPersonAnim = "pt_data_knife_spectre_leech_end" //"pt_data_knife_drone_end"
+	playerSequence.firstPersonAnim = "ptpov_data_knife_spectre_leech_end" //"ptpov_data_knife_drone_end"
+	playerSequence.snapPlayerFeetToEyes = false
+
+	entity ref = e.ref
+
+    //-------------------------------------------------------------
+	// Target Sequence
+	//-------------------------------------------------------------
+    FirstPersonSequenceStruct targetSequence
+    targetSequence.blendTime = 0.3
+	targetSequence.attachment = "ref"
+	targetSequence.teleport = false
+	targetSequence.thirdPersonAnim = "sspec_attack_powerdown_end"
+
+	thread FirstPersonSequence( targetSequence, target, null )
+
+	waitthread FirstPersonSequence( playerSequence, player, ref )
+
+	//-------------------------------------------------------------
+	// Detach from rodeo if applicable (drones, superspectres, etc)
+	//-------------------------------------------------------------
+	if ( Rodeo_IsAttached( player ) )
+		player.Signal( "RodeoOver" )
+}
