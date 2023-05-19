@@ -413,13 +413,6 @@
 			"RunOn": "SERVER && MP"
 		},
 		{
-			"Path": "/gameutil/titan_respawn_protection.gnut",
-			"RunOn": "SERVER && MP",
-            "ServerCallback": {
-                "After": "Titan_Respawn_Protection_Init"
-            }
-		},
-		{
 			"Path": "/gameutil/private_chat.gnut",
 			"RunOn": "SERVER && MP",
             "ServerCallback": {
