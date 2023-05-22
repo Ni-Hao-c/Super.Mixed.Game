@@ -75,9 +75,10 @@ const float BLEEDOUT_MODE_DEATH_OWNED_VALUE = 0.3 // killed by a player will giv
 const array<int> BLEEDOUT_DOT_DAMAGE_TYPES =
 [
 	eDamageSourceId.mp_weapon_thermite_grenade,
-	eDamageSourceId.mp_weapon_grenade_electric_smoke
+	eDamageSourceId.mp_weapon_grenade_electric_smoke,
+	eDamageSourceId.burn, // triggered by "thermite_grenade_dot"
 ]
-const float BLEEDOUT_DOWNED_DOT_DAMAGE_SCALE = 0.4 // scale dot damage for downed players, so they can try to escape
+const float BLEEDOUT_DOWNED_DOT_DAMAGE_SCALE = 0.3 // scale dot damage for downed players, so they can try to escape
 
 // things below should be in playlistvar
 /*
@@ -355,7 +356,7 @@ void function OnPlayerGetsPilotLoadout( entity player, PilotLoadoutDef p )
         thread GiveMeleeAfterGracePeriod( player )
     else
 	{
-		// fuck off frag and satchels
+		// balance ordnances
 		entity ordnance = player.GetOffhandWeapon( OFFHAND_ORDNANCE )
 		if ( IsValid( ordnance ) )
 		{
@@ -364,8 +365,13 @@ void function OnPlayerGetsPilotLoadout( entity player, PilotLoadoutDef p )
 			{
 				case "mp_weapon_frag_grenade":
 					ordnance.AddMod( "frag_no_charge" )
+					break
 				case "mp_weapon_satchel":
 					ordnance.AddMod( "satchel_long_delay" )
+					break
+				case "mp_weapon_thermite_grenade":
+					ordnance.AddMod( "thermite_grenade_dot" )
+					break
 			}
 			
 		}
