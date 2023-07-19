@@ -42,7 +42,6 @@ void function Score_Init()
 	InitTitanKilledDialogues()
 	AddCallback_OnNPCKilled( CheckForAutoTitanDeath )
 	AddCallback_OnPlayerKilled( CheckForAutoTitanDeath )
-	AddCallback_OnTitanDoomed( HandleTitanDoomedScoreEvent )
 }
 
 // modified!!!
@@ -311,25 +310,6 @@ void function ScoreEvent_TitanDoomed( entity titan, entity attacker, var damageI
 		AddPlayerScore( attacker, "DoomTitan", titan, eEventDisplayType.MEDAL )
 }
 
-// needs this to handle npc doom titan
-void function HandleTitanDoomedScoreEvent( entity titan, var damageInfo )
-{
-	entity titanSoul = titan.GetTitanSoul()
-	// same check as _titan_health.gnut, HandleKillshot() does
-	entity attacker = expect entity( expect table( titanSoul.lastAttackInfo ).attacker )
-	if ( IsValid( attacker ) )
-	{
-		entity bossPlayer = attacker.GetBossPlayer()
-		if ( attacker.IsNPC() && IsValid( bossPlayer ) )
-			attacker = bossPlayer
-
-		// obit
-		// modified function in _titan_health.gnut, recovering ttf1 behavior: we do obit on doom but not on death for health loss titans
-		if ( !TitanHealth_GetSoulInfiniteDoomedState( titan.GetTitanSoul() ) )
-			NotifyClientsOfTitanDeath( titan, attacker, damageInfo )
-	}
-}
-
 void function ScoreEvent_TitanKilled( entity victim, entity attacker, var damageInfo )
 {
 	// will this handle npc titans with no owners well? i have literally no idea
@@ -400,10 +380,6 @@ void function CheckForAutoTitanDeath( entity victim, entity attacker, var damage
 		return
 
 	if ( !IsValid( attacker ) )
-		return
-
-	// modified function in _titan_health.gnut, recovering ttf1 behavior: we do obit on doom but not on death for health loss titans
-	if ( !TitanHealth_GetSoulInfiniteDoomedState( victim.GetTitanSoul() ) )
 		return
 
 	// obit
