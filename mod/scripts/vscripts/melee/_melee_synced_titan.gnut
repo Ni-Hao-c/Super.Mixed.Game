@@ -2,23 +2,8 @@ untyped
 
 global function MeleeSyncedTitan_Init
 
-global function MeleeThread_TitanVsTitan // globalize it!
-
 const TITANARMMODEL = $"models/weapons/arms/atlaspov.mdl"
 const TEAM_JUMPJET_DBL = $"P_team_jump_jet_DBL"
-
-// modified
-global function MeleeSyncedTitan_ExecutionNotInvulnerable
-// modified to have more execution options
-global function MeleeSyncedTitan_SetSoulDoClassicExecution
-global function MeleeSyncedTitan_DisableVanguardKitExecution
-
-global function MeleeSyncedTitan_SetSoulUseExecutionCallback
-global function MeleeSyncedTitan_SetSoulShouldReplaceLoadoutOnExecution
-
-global function MeleeSyncedTitan_SetSoulCanBeExecuted // modified for checks in AttemptScriptedExecution()
-global function MeleeSyncedTitan_SoulCanBeExecuted
-//
 
 enum eTitanExecutionType
 {
@@ -42,16 +27,6 @@ struct TitanExcutionData
 struct
 {
 	table<string, TitanExcutionData> executionData_3p
-
-	// modified
-	bool titanExecutionNotInvulnerable = false
-	// modified to have more execution options
-	table<entity, bool> soulDoClassicExecution
-	bool disableVanguardKit = false
-	table<entity, bool> soulUseExecutionCallback
-	table<entity, bool> soulShouldReplaceLoadout
-
-	table<entity, bool> soulCanBeExecuted
 } file
 
 int RAGDOLL_IMPACT_TABLE_IDX = -1
@@ -218,8 +193,7 @@ bool function MeleeThread_TitanVsTitan_Internal( SyncedMelee action, entity atta
 				if ( dataStruct.setAttackerDemigod )
 					DisableDemigod( attacker )
 
-				if( attacker.IsPlayer() ) // saved for npc executions
-					attacker.PlayerMelee_SetState( PLAYER_MELEE_STATE_NONE )
+				attacker.PlayerMelee_SetState( PLAYER_MELEE_STATE_NONE )
 			}
 		}
 	)
@@ -238,36 +212,20 @@ bool function MeleeThread_TitanVsTitan_Internal( SyncedMelee action, entity atta
 		burnCardTarget = target
 	}
 
-	if( attacker.IsPlayer() ) // save for npc executions
-		attacker.PlayerMelee_ExecutionStartAttacker( 0 )
+	attacker.PlayerMelee_ExecutionStartAttacker( 0 )
 	target.PlayerMelee_ExecutionStartTarget( attacker )
 
-	if( attacker.IsPlayer() ) // save for npc executions
-		attacker.Lunge_ClearTarget()
+	attacker.Lunge_ClearTarget()
 
 	ForceTitanSustainedDischargeEnd( target )
 
-	//#if TITAN_EXECUTION_ATTACKER_IS_INVULNERABLE // use my own check!
-	if( !file.titanExecutionNotInvulnerable )
-	{
+	#if TITAN_EXECUTION_ATTACKER_IS_INVULNERABLE
 		dataStruct.setAttackerInvulnerable = true
 		attacker.SetInvulnerable()
-	}
-	else //#else
-	{
-		if( attacker.IsPlayer() )
-		{
-			dataStruct.setAttackerDemigod = true
-			EnableDemigod( attacker )
-		}
-	}
-	//#endif
-
-	// modified: if function reaches here it must means titan being executed, we delay 1 frame and drop their weapon
-#if MP
-	ExecutedTitanDropWeapon( target )
-#endif
-	//
+	#else
+		dataStruct.setAttackerDemigod = true
+		EnableDemigod( attacker )
+	#endif
 
 	waitthread func( action, attacker, target )
 
@@ -292,48 +250,30 @@ bool function MeleeThread_TitanVsTitan_Internal( SyncedMelee action, entity atta
 
 void functionref( SyncedMelee action, entity attacker, entity target ) function GetTitanSyncedMeleeFunc( entity attacker, entity target )
 {
+	if ( GetCurrentPlaylistVarInt( "titan_executions_always_short", 0 ) != 0 )
+		return MeleeThread_AtlasVsTitanShort
+
 	entity soul = attacker.GetTitanSoul()
-	// modified here... could get some tf1 execution
-	bool useClassicExecution = GetSoulDoClassicExecution( soul )
-
-	string attackerType = GetSoulTitanSubClass( soul )
-
-	//entity soul = attacker.GetTitanSoul() // moved up
 	#if SP
 	TitanLoadoutDef loadout = GetTitanLoadoutForCurrentMap()
 	#else
 	TitanLoadoutDef loadout = soul.soul.titanLoadout // GetActiveTitanLoadout( attacker )
 	#endif
 	string executionRef = loadout.titanExecution
-	// modified to nerf monarch
-	if ( !file.disableVanguardKit )
-	{
-		if ( SoulHasPassive( soul, ePassives.PAS_VANGUARD_COREMETER ) && attackerType == "atlas" ) // idk why respawn have to hardcode this
-			executionRef = "execution_vanguard_kit"
-	}
+	if ( SoulHasPassive( soul, ePassives.PAS_VANGUARD_COREMETER ) )
+		executionRef = "execution_vanguard_kit"
 
-	//if ( executionRef in file.executionData_3p )
-	if ( executionRef in file.executionData_3p && !useClassicExecution ) // classic execution check!
+	if ( executionRef in file.executionData_3p )
 		return TitanVsTitan_3p
-
-	// below must be tf1 execution, remove cinematic
-	thread ForceRemoveExecutioCinematic( attacker )
-	thread ForceRemoveExecutioCinematic( target )
 
 	if ( target.IsNPC() )
 	{
 		entity bossPlayer = target.GetBossPlayer()
-		// adding check: TitanHasNpcPilot()
-		//if ( IsValid( bossPlayer ) || !IsVDUTitan( target ) )
-		#if NPC_TITAN_PILOT_PROTOTYPE
-			if ( !IsValid( bossPlayer ) && !TitanHasNpcPilot( target ) )
-		#else // vanilla behavior
-			if ( IsValid( bossPlayer ) || !IsVDUTitan( target ) )
-		#endif
-				return MeleeThread_AtlasVsTitanShort
+		if ( IsValid( bossPlayer ) || !IsVDUTitan( target ) )
+			return MeleeThread_AtlasVsTitanShort
 	}
 
-	//string attackerType = GetSoulTitanSubClass( soul ) // moved up
+	string attackerType = GetSoulTitanSubClass( soul )
 
 	switch ( attackerType )
 	{
@@ -349,19 +289,6 @@ void functionref( SyncedMelee action, entity attacker, entity target ) function 
 	}
 
 	return null
-}
-
-void function ForceRemoveExecutioCinematic( entity ent )
-{
-	wait 0.1
-	if( IsValid( ent ) )
-	{
-		if( ent.IsPlayer() )
-		{
-			RemoveCinematicFlag( ent, CE_FLAG_EXECUTION )
-			RemoveCinematicFlag( ent, CE_FLAG_TITAN_3P_CAM )
-		}
-	}
 }
 
 void function MeleeThread_AtlasVsTitanShort( SyncedMelee action, entity attacker, entity target )
@@ -403,29 +330,12 @@ void function MeleeThread_AtlasVsTitanShort( SyncedMelee action, entity attacker
 	//	attacker.SetInvulnerable()
 	target.SetInvulnerable()    //HACK: Have to SetInvulnerable first before attacker holsters weapon, because if the attacker is vortexing, holster will release bullets caught and kill off the victim if low enough health
 
-	// modified
-	if ( attacker.IsPlayer() )
-	{
-		HolsterViewModelAndDisableWeapons( attacker )  //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
-		attacker.ClearOffhand() // since this is first person execution, should clear out player's offhand weapon( eg.melee )
-		attacker.Anim_StopGesture( 0 ) // ttf1 executions lasts short, should instant stop their animation and set to executions
-	}
-
 	//HACK! This function was originally for NPCs only, but now that it is being used for players, we need to holster their weapon
-	// modified
-	//if ( target.IsPlayer() )
-	//	HolsterAndDisableWeapons( target )
 	if ( target.IsPlayer() )
-	{
-		HolsterViewModelAndDisableWeapons( target )  //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
-		target.Anim_StopGesture( 0 )
-	}
-	else
-		DisableWeapons( target, [] )
+		HolsterAndDisableWeapons( target )
 
-	// should always holster main weapon! moved up
-	//if ( ShouldHolsterWeaponForSyncedMelee( attacker ) )
-	//	HolsterAndDisableWeapons( attacker )
+	if ( ShouldHolsterWeaponForSyncedMelee( attacker ) )
+		HolsterAndDisableWeapons( attacker )
 
 	local attackerViewBody
 
@@ -456,32 +366,12 @@ void function MeleeThread_AtlasVsTitanShort( SyncedMelee action, entity attacker
 
 			if ( IsValid( attacker ) )
 			{
-				// saved for ai executions
-				attacker.ClearParent()
-				if( attacker.IsPlayer() )
-				{
-					attacker.UnforceStand()
-					ClearPlayerAnimViewEntity( attacker )
-					// modified
-					//DeployAndEnableWeapons( attacker )
-					DeployViewModelAndEnableWeapons( attacker )
-					attacker.PlayerMelee_ExecutionEndAttacker()
-				}
-				else
-				{
-					// modified
-					//EnableWeapons( attacker, [] )
-					Highlight_ClearEnemyHighlight( attacker ) // this only resets victim's highlights for some reason
-				}
-
 				//attacker.ClearInvulnerable()
-
-				// changed for npc executions
-				//attacker.UnforceStand()
-				//attacker.ClearParent()
-				//ClearPlayerAnimViewEntity( attacker )
-				//DeployAndEnableWeapons( attacker )
-				//attacker.PlayerMelee_ExecutionEndAttacker()
+				attacker.UnforceStand()
+				attacker.ClearParent()
+				ClearPlayerAnimViewEntity( attacker )
+				DeployAndEnableWeapons( attacker )
+				attacker.PlayerMelee_ExecutionEndAttacker()
 
 				if ( IsAlive( attacker ) )
 				{
@@ -501,12 +391,9 @@ void function MeleeThread_AtlasVsTitanShort( SyncedMelee action, entity attacker
 				{
 					target.PlayerMelee_ExecutionEndTarget()
 					ClearPlayerAnimViewEntity( target )
-					// modified
-					//DeployAndEnableWeapons( target )
-					DeployViewModelAndEnableWeapons( target )
+					DeployAndEnableWeapons( target )
 				}
-				else
-					EnableWeapons( target, [] )
+
 
 				if ( IsAlive( target ) )
 				{
@@ -524,15 +411,6 @@ void function MeleeThread_AtlasVsTitanShort( SyncedMelee action, entity attacker
 			}
 		}
 	)
-
-	// fix for modified deathcam: player can respawn before attacker sequence ends, causes them being killed again, or cause PutEntityInSafeSpot() teleports attacker
-	// needs to end execution if target respawned
-	if ( target.IsPlayer() )
-	{
-		// make respawning cleans up execution
-		EndThreadOnPlayerRespawn( target )
-	}
-	//
 
 	thread FirstPersonSequence( targetSequence, target, ref )
 	waitthread FirstPersonSequence( attackerSequence, attacker, ref )
@@ -598,32 +476,11 @@ function MeleeThread_TitanRipsPilot( table e, SyncedMelee action, entity attacke
 
 	//	attacker.SetInvulnerable()
 	target.SetInvulnerable()    //HACK: Have to SetInvulnerable first before attacker holsters weapon, because if the attacker is vortexing, holster will release bullets caught and kill off the victim if low enough health
+	if ( ShouldHolsterWeaponForSyncedMelee( attacker ) )
+		HolsterAndDisableWeapons( attacker )
 
-	// modified, always holster!!!
-	//if ( ShouldHolsterWeaponForSyncedMelee( attacker ) )
-	//{
-	//	if ( attacker.IsPlayer() )
-	//		HolsterAndDisableWeapons( attacker )
-	//	else
-	//		DisableWeapons( attacker, [] )
-	//}
-	if ( attacker.IsPlayer() )
-	{
-		HolsterViewModelAndDisableWeapons( attacker )  //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
-		attacker.ClearOffhand() // since this is first person execution, should clear out player's offhand weapon( eg.melee )
-		attacker.Anim_StopGesture( 0 ) // ttf1 executions lasts short, should instant stop their animation and set to executions
-	}
-
-	// modified
-	//if ( !target.IsNPC() )
-	//	HolsterAndDisableWeapons( target )
-	if ( target.IsPlayer() )
-	{
-		HolsterViewModelAndDisableWeapons( target )  //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
-		target.Anim_StopGesture( 0 )
-	}
-	else
-		DisableWeapons( target, [] )
+	if ( !target.IsNPC() )
+		HolsterAndDisableWeapons( target )
 
 	EmitDifferentSoundsOnEntityForPlayerAndWorld( expect string ( e.TitanSpecific1pSyncMeleeSound ), expect string ( e.TitanSpecific3pSyncMeleeSound ), attacker, attacker )
 
@@ -675,31 +532,14 @@ function MeleeThread_TitanRipsPilot( table e, SyncedMelee action, entity attacke
 		targetTitan.kv.VisibilityFlags = (ENTITY_VISIBLE_TO_FRIENDLY | ENTITY_VISIBLE_TO_ENEMY) //owner cant see
 		targetTitan.PlayerMelee_ExecutionStartTarget( attacker )
     	e.target <- target
-
-		// modified for titanpick!
-		// don't drop weapon on this titan. CreateAutoTitanForPlayer_ForTitanBecomesPilot() won't spawn a soul, so we get soul after player transfer their titanSoul(through TitanBecomesPilot) to this targetTitan
-		entity soul = targetTitan.GetTitanSoul()
-		if ( IsValid( soul ) )
-			TitanPick_SoulSetEnableWeaponDrop( soul, false )
 	}
 	else
 	{
 		targetTitan = target
 
-		// modified for titanpick!
-		// don't drop weapon on this titan
-		entity soul = targetTitan.GetTitanSoul()
-		if ( IsValid( soul ) )
-			TitanPick_SoulSetEnableWeaponDrop( soul, false )
-
 		// target is now a random dude
-		//target = CreateSoldier( target.GetTeam(), Vector(0,0,0), Vector(0,0,0) )
-		target = CreateNPC( "npc_pilot_elite", targetTitan.GetTeam(), targetTitan.GetOrigin(), < 0,0,0 > )
+		target = CreateSoldier( target.GetTeam(), Vector(0,0,0), Vector(0,0,0) )
 		DispatchSpawn( target )
-		// modified: make them use pilot's model, and mark as silentDeath
-		TakeAllWeapons( target )
-		target.SetModel( GetNpcTitanPilotModel( targetTitan ) )
-		target.s.silentDeath <- true
     	e.target <- target
 	}
 
@@ -745,29 +585,11 @@ function MeleeThread_TitanRipsPilot( table e, SyncedMelee action, entity attacke
 
 			if ( IsValid( attacker ) )
 			{
+				attacker.UnforceStand()
 				attacker.ClearParent()
-				// saved for npc executions
-				if( attacker.IsPlayer() )
-				{
-					attacker.UnforceStand()
-					ClearPlayerAnimViewEntity( attacker ) 
-					// modified
-					//DeployAndEnableWeapons( attacker )
-					DeployViewModelAndEnableWeapons( attacker )
-					attacker.PlayerMelee_ExecutionEndAttacker()
-				}
-				else
-				{
-					EnableWeapons( attacker, [] )
-					Highlight_ClearEnemyHighlight( attacker ) // this only resets victim's highlights for some reason
-				}
-
-				// change for npc executions
-				//attacker.UnforceStand()
-				//attacker.ClearParent()
-				//ClearPlayerAnimViewEntity( attacker ) 
-				//DeployAndEnableWeapons( attacker )
-				//attacker.PlayerMelee_ExecutionEndAttacker()
+				ClearPlayerAnimViewEntity( attacker )
+				DeployAndEnableWeapons( attacker )
+				attacker.PlayerMelee_ExecutionEndAttacker()
 
 				if ( IsAlive( attacker ) )
 				{
@@ -782,9 +604,7 @@ function MeleeThread_TitanRipsPilot( table e, SyncedMelee action, entity attacke
 				{
 					target.PlayerMelee_ExecutionEndTarget()
 					ClearPlayerAnimViewEntity( target )
-					// modified
-					//DeployAndEnableWeapons( target )
-					DeployViewModelAndEnableWeapons( target )
+					DeployAndEnableWeapons( target )
 				}
 
 				if ( HasAnimEvent( target, "pink_mist" ) )
@@ -815,15 +635,7 @@ function MeleeThread_TitanRipsPilot( table e, SyncedMelee action, entity attacke
 		}
 	)
 
-	target.EndSignal( "OnRespawnPlayer" ) // northstar scripts didn't use this often... this is signaled in CPlayer::RespawnPlayer()
-	// fix for modified deathcam: player can respawn before attacker sequence ends, causes them being killed again, or cause PutEntityInSafeSpot() teleports attacker
-	// needs to end execution if target respawned
-	if ( target.IsPlayer() )
-	{
-		// make respawning cleans up execution
-		EndThreadOnPlayerRespawn( target )
-	}
-	//
+	target.EndSignal( "OnRespawnPlayer" )
 
 	waitthread TitanSyncedMeleeAnimationsPlay( attackerBodySequence, attackerViewBody, ref, targetBodySequence, target, attackerSequence, attacker, targetSequence, targetTitan, e )
 }
@@ -831,27 +643,20 @@ function MeleeThread_TitanRipsPilot( table e, SyncedMelee action, entity attacke
 entity function CreateNpcTitanPilotModel( entity titan )
 {
 	asset modelName = GetNpcTitanPilotModel( titan )
-	entity pilotModel = CreatePropDynamic( modelName, titan.GetAttachmentAngles( titan.LookupAttachment( "hijack" ) ) ) // spawn right under titan, won't have the model "flash" into titans.
-	SetTeam( pilotModel, titan.GetTeam() ) // so prop will have team lights
-	//SetDefaultMPEnemyHighlight( pilotModel ) // don't know should use
-	return pilotModel
+	return CreatePropDynamic( modelName )
 }
+
+
 
 asset function GetNpcTitanPilotModel( entity titan )
 {
 	asset modelName = TEAM_IMC_GRUNT_MODEL
 
 	#if HAS_BOSS_AI
-		if ( IsBossTitan( titan ) )
-		{
-			modelName = GetBossTitanCharacterModel( titan )
-		}
-	#elseif NPC_TITAN_PILOT_PROTOTYPE // modified condition
-		if( TitanHasNpcPilot( titan ) )
-		{
-			entity titanSoul = titan.GetTitanSoul()
-			modelName = titanSoul.soul.seatedNpcPilot.modelAsset
-		}
+	if ( IsBossTitan( titan ) )
+	{
+		modelName = GetBossTitanCharacterModel( titan )
+	}
 	#endif
 
 	return modelName
@@ -890,14 +695,7 @@ function TitanSyncedMeleeAnimationsPlay( FirstPersonSequenceStruct attackerBodyS
 
 	attacker.EndSignal( "OnDeath" )
 	target.EndSignal( "OnDestroy" )
-	target.EndSignal( "OnRespawnPlayer" ) // northstar scripts didn't use this often... this is signaled in CPlayer::RespawnPlayer()
-
-	if ( !attacker.IsPlayer() ) // save for npc titans
-	{
-		// don't do first person anims if we're not a player
-		attackerBodySequence.firstPersonAnim = ""
-		attackerBodySequence.firstPersonAnimIdle = ""
-	}
+	target.EndSignal( "OnRespawnPlayer" )
 
 	thread FirstPersonSequence( attackerBodySequence, attackerViewBody, ref )
 	if ( !target.IsPlayer() )
@@ -1114,27 +912,11 @@ void function MeleeThread_OgreVsTitan( SyncedMelee action, entity attacker, enti
 	targetSequence.blendTime = 0.25
 
 	target.e.syncedMeleeAttacker = attacker
+	DisableWeapons( attacker, [] )
+	DisableWeapons( target, [] )
 
-	// modified
-	//DisableWeapons( attacker, [] )
-	if ( attacker.IsPlayer() )
-	{
-		HolsterViewModelAndDisableWeapons( attacker )  //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
-		attacker.ClearOffhand() // since this is first person execution, should clear out player's offhand weapon( eg.melee )
-		attacker.Anim_StopGesture( 0 ) // ttf1 executions lasts short, should instant stop their animation and set to executions
-	}
-
-	// modified
-	//DisableWeapons( target, [] ) 
-	//	attacker.SetInvulnerable() // set from main thread
+	//	attacker.SetInvulnerable()
 	target.SetInvulnerable()
-	if ( target.IsPlayer() )
-	{
-		HolsterViewModelAndDisableWeapons( target )  //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
-		target.Anim_StopGesture( 0 )
-	}
-	else
-		DisableWeapons( target, [] )
 
 	entity soul = target.GetTitanSoul()
 	soul.SetInvalidHealthBarEnt( true )
@@ -1156,42 +938,22 @@ void function MeleeThread_OgreVsTitan( SyncedMelee action, entity attacker, enti
 
 			if ( IsValid( attacker ) )
 			{
-				// save for npc executions
+				attacker.UnforceStand()
 				attacker.ClearParent()
-				//EnableWeapons( attacker, [] )
-				if( attacker.IsPlayer() )
-				{
-					attacker.UnforceStand()
-					ClearPlayerAnimViewEntity( attacker )
-					attacker.PlayerMelee_ExecutionEndAttacker()
-					// modified
-					DeployViewModelAndEnableWeapons( attacker ) // so ogre titans can have their weapon back
-				}
-				else // npc
-				{
-					Highlight_ClearEnemyHighlight( attacker ) // this only resets victim's highlights for some reason
-					EnableWeapons( attacker, [] )
-				}
-
-				// changed for npc executions
-				//attacker.UnforceStand()
-				//attacker.ClearParent()
-				//ClearPlayerAnimViewEntity( attacker )
-				//EnableWeapons( attacker, [] )
-				//attacker.PlayerMelee_ExecutionEndAttacker()
+				ClearPlayerAnimViewEntity( attacker )
+				EnableWeapons( attacker, [] )
+				attacker.PlayerMelee_ExecutionEndAttacker()
 
 				if ( IsAlive( attacker ) )
 				{
 					// if we got into solid, teleport back to safe place
 					PutEntityInSafeSpot( attacker, null, null, expect vector( e.attackerStartOrg ), attacker.GetOrigin() )
-					attacker.SetActiveWeaponBySlot( 0 ) // so ogre titans can have their weapon back, doesn't seem necessary
 				}
 			}
 
 			if ( IsValid( target ) )
 			{
-				if( HasAnimEvent( target, "lost_arm" ) )
-					DeleteAnimEvent( target, "lost_arm" )
+				DeleteAnimEvent( target, "lost_arm" )
 
 				target.e.syncedMeleeAttacker = null
 
@@ -1200,12 +962,9 @@ void function MeleeThread_OgreVsTitan( SyncedMelee action, entity attacker, enti
 				if ( target.IsPlayer() )
 				{
 					ClearPlayerAnimViewEntity( target )
-					// modified
-					//DeployAndEnableWeapons( target )
-					DeployViewModelAndEnableWeapons( target )
 				}
-				else
-					EnableWeapons( target, [] )
+
+				EnableWeapons( target, [] )
 
 				if ( !target.IsNPC() )
 					target.PlayerMelee_ExecutionEndTarget()
@@ -1219,23 +978,11 @@ void function MeleeThread_OgreVsTitan( SyncedMelee action, entity attacker, enti
 				{
 					PutEntityInSafeSpot( target, null, null, expect vector( e.targetStartOrg ), target.GetOrigin() )
 				}
-
-				// fix for death animation
-				if ( !IsAlive( target ) ) // target killed!
-					target.BecomeRagdoll( < 0, 0, 0 >, false )
 			}
 		}
 	)
 
 	attacker.EndSignal( "OnDeath" )
-	// fix for modified deathcam: player can respawn before attacker sequence ends, causes them being killed again, or cause PutEntityInSafeSpot() teleports attacker
-	// needs to end execution if target respawned
-	if ( target.IsPlayer() )
-	{
-		// make respawning cleans up execution
-		EndThreadOnPlayerRespawn( target )
-	}
-	//
 
 	EmitDifferentSoundsOnEntityForPlayerAndWorld( "Ogre_1p_Sync_Melee", "Ogre_3p_Sync_Melee", attacker, attacker )
 
@@ -1256,11 +1003,11 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 		return
 
 	entity attackerSoul = attacker.GetTitanSoul()
-#if SP
+	#if SP
 	TitanLoadoutDef loadout = GetTitanLoadoutForCurrentMap()
 	string executionRef = loadout.titanExecution
 	TitanExcutionData data = file.executionData_3p[ executionRef ]
-#else
+	#else
 	TitanLoadoutDef loadout = attackerSoul.soul.titanLoadout // GetActiveTitanLoadout( attacker )
 	string executionRef = loadout.titanExecution
 	TitanExcutionData data = file.executionData_3p[ executionRef ]
@@ -1275,74 +1022,14 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 		executionRef = clonedLinkedExecutions.getrandom()
 		data = file.executionData_3p[ executionRef ]
 	}
-#endif
-
-	bool shouldApplyBatteryAfterRodeo = false
-	string attackerType = GetSoulTitanSubClass( attackerSoul )
-	// modified to nerf monarch
-	if ( !file.disableVanguardKit )
-	{
-		if ( SoulHasPassive( attackerSoul, ePassives.PAS_VANGUARD_COREMETER ) )
-		{
-			if ( attackerType == "atlas" ) // anti crash
-			{
-				executionRef = "execution_vanguard_kit"
-				data = file.executionData_3p[ executionRef ]
-			}
-			shouldApplyBatteryAfterRodeo = true // even if we're not atlas model, apply batteries if we have the passive
-		}
-	}
-
-	// extra check for npc monarch executions -- spawn with no passive and ref "execution_random_6", uses random execution!
-	#if NPC_TITAN_PILOT_PROTOTYPE
-		if ( !SoulHasPassive( attackerSoul, ePassives.PAS_VANGUARD_COREMETER ) )
-		{
-			if ( TitanHasNpcPilot( attacker ) && executionRef == "execution_random_6" ) // also check if pilot valid
-			{
-				if ( CoinFlip() ) 
-				{
-					if ( attackerType == "atlas" ) // anti crash
-					{
-						executionRef = "execution_vanguard_kit"
-						data = file.executionData_3p[ executionRef ]
-					}
-					shouldApplyBatteryAfterRodeo = true
-				}
-			}
-		}
 	#endif
-
-	// apply battery check for monarch that spawn with "execution_vanguard_kit"
-	if ( !shouldApplyBatteryAfterRodeo && executionRef == "execution_vanguard_kit" )
-		shouldApplyBatteryAfterRodeo = true
-
-	// add a condition for bt can use random executions
-	if ( executionRef == "execution_bt" ) // if we're using unnamed bt execution
+	bool shouldApplyBatteryAfterRodeo = false
+	if ( SoulHasPassive( attackerSoul, ePassives.PAS_VANGUARD_COREMETER ) )
 	{
-		// select a random one
-		array<string> btExecutions = ["execution_bt_flip"] // always enabled
-		bool titanHasPilot = target.IsPlayer()
-		#if HAS_BOSS_AI
-			titanHasPilot = titanHasPilot || ( IsBossTitan( target ) )
-		#elseif NPC_TITAN_PILOT_PROTOTYPE // modified condition
-			titanHasPilot = titanHasPilot || TitanHasNpcPilot( target )
-		#endif
-		if ( titanHasPilot ) // try to use pilotrip only if target has a seated pilot model
-			btExecutions.append( "execution_bt_pilotrip" )
-		if ( attacker.GetMainWeapons().len() > 0 ) // try to use kickshoot only if attacker has at least one main weapon
-			btExecutions.append( "execution_bt_kickshoot" )
-		executionRef = btExecutions[ RandomInt( btExecutions.len() ) ]
-		data = file.executionData_3p[ executionRef ] // update execution data
+		executionRef = "execution_vanguard_kit"
+		data = file.executionData_3p[ executionRef ]
+		shouldApplyBatteryAfterRodeo = true
 	}
-
-	//print( "executionRef is: " + executionRef )
-	// modified: callbacks in sh_melee_synced_titan.gnut
-	if ( GetSoulUseExecutionCallback( attacker.GetTitanSoul() ) )
-		MeleeSyncedTitan_RunCallbackForRef( executionRef, attacker, target )
-	// modified: loadout replace think in sh_melee_synced_titan.gnut
-	// force attacker to use certain execution's weapon, to avoid visual issues
-	if ( GetSoulReplaceLoadoutOnExecution( attacker.GetTitanSoul() ) )
-		MeleeSyncedTitan_RunLoadoutReplaceCallbackForRef( executionRef, attacker )
 
 	string victimType = GetSoulTitanSubClass( target.GetTitanSoul() )
 
@@ -1360,32 +1047,33 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 	attackerSequence.noViewLerp = true
 
 	FirstPersonSequenceStruct targetSequence = clone attackerSequence
+
 	attackerSequence.thirdPersonAnim = data.attackerAnimation3p
-	
 	attackerSequence.firstPersonAnim = ""
 
 	if ( target.IsPlayer() )
 		targetSequence.firstPersonAnim = ""
 
 	targetSequence.thirdPersonAnim = data.targetAnimation3p[ victimType ]
-	
 	targetSequence.thirdPersonCameraEntity = target
 
 	target.e.syncedMeleeAttacker = attacker
 
-	// mp version handled in sh_melee_synced_titan.gnut, Execution_BT_KickShoot()
 	// HACK FOR SP!!!
 	e.replacedPrimary <- false
 	string xo16 = "mp_titanweapon_xo16_shorty"
-	array<entity> weapons = attacker.GetMainWeapons()
 	if ( IsSingleplayer() && attacker.IsPlayer() && data.attackerAnimation3p == "bt_synced_titan_execute_kickshoot_A" )
 	{
-		if ( weapons[0].GetWeaponClassName() != xo16 )
+		array<entity> weapons = attacker.GetMainWeapons()
+		if ( weapons.len() > 0 )
 		{
-			e.replacedPrimary = true
-			e.oldPrimary <- weapons[0].GetWeaponClassName()
-			attacker.SetActiveWeaponBySlot( 0 )
-			attacker.ReplaceActiveWeapon( xo16 ) //this assumes the active weapon is the weapon in slot 0 so we need to set active weapon to the one in slot 0
+			if ( weapons[0].GetWeaponClassName() != xo16 )
+			{
+				e.replacedPrimary = true
+				e.oldPrimary <- weapons[0].GetWeaponClassName()
+				attacker.SetActiveWeaponBySlot( 0 )
+				attacker.ReplaceActiveWeapon( xo16 ) //this assumes the active weapon is the weapon in slot 0 so we need to set active weapon to the one in slot 0
+			}
 		}
 	}
 	// END HACK FOR SP!!!
@@ -1400,8 +1088,6 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 		HolsterViewModelAndDisableWeapons( attacker )  //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
 		attacker.Anim_StopGesture( DEFAULT_SCRIPTED_ANIMATION_BLEND_TIME )
 	}
-	if ( target.IsPlayer() ) // vanilla missing! target should also stop gesture animation!
-		target.Anim_StopGesture( DEFAULT_SCRIPTED_ANIMATION_BLEND_TIME )
 
 	//	attacker.SetInvulnerable()
 	target.SetInvulnerable()
@@ -1414,8 +1100,6 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 	bool titanHasPilot = target.IsPlayer()
 	#if HAS_BOSS_AI
 		titanHasPilot = titanHasPilot || ( IsBossTitan( target ) )
-	#elseif NPC_TITAN_PILOT_PROTOTYPE // modified condition
-		titanHasPilot = titanHasPilot || TitanHasNpcPilot( target )
 	#endif
 
 	if ( attacker.IsPlayer() )
@@ -1446,14 +1130,9 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 		AddAnimEvent( targetViewBody, "pink_mist", MeleePinkMistFakeBody )
 	}
 
-	// modified for npc executions!
-	//if ( data.attackerAnimation3pPilot[ victimType ] != "" && attacker.IsPlayer() )
-	if ( data.attackerAnimation3pPilot[ victimType ] != "" && ( attacker.IsPlayer() || TitanHasNpcPilot( attacker ) ) )
+	if ( data.attackerAnimation3pPilot[ victimType ] != "" && attacker.IsPlayer() )
 	{
-		if ( attacker.IsNPC() ) // saved for npc executions
-			attackerViewBody = CreateNpcTitanPilotModel( attacker )
-		else
-			attackerViewBody = Wallrun_CreateCopyOfPilotModel( attacker )
+		attackerViewBody = Wallrun_CreateCopyOfPilotModel( attacker )
 
 		attackerViewBody.SetOrigin( attacker.GetOrigin() )
 		attackerViewBody.SetRagdollImpactFX( RAGDOLL_IMPACT_TABLE_IDX )
@@ -1466,8 +1145,7 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 
 	if ( !IsValid( targetViewBody ) )
 	{
-		if( attackerSequence.thirdPersonAnim == data.attackerAnimation3p )
-			attackerSequence.thirdPersonAnim = data.attackerAnimation3p_vsAutoTitan
+		attackerSequence.thirdPersonAnim = data.attackerAnimation3p_vsAutoTitan
 	}
 
 	entity soul = target.GetTitanSoul()
@@ -1484,37 +1162,16 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 		{
 			if ( IsValid( attacker ) )
 			{
-				if( HasAnimEvent( attacker, "synced_melee_enable_planting" ) )
-					DeleteAnimEvent( attacker, "synced_melee_enable_planting" )
-				if( HasAnimEvent( attacker, "rocket_pod_fire_left" ) )
-					DeleteAnimEvent( attacker, "rocket_pod_fire_left" )
-				if( HasAnimEvent( attacker, "rocket_pod_fire_right" ) )
-					DeleteAnimEvent( attacker, "rocket_pod_fire_right" )
+				DeleteAnimEvent( attacker, "synced_melee_enable_planting" )
+				DeleteAnimEvent( attacker, "rocket_pod_fire_left" )
+				DeleteAnimEvent( attacker, "rocket_pod_fire_right" )
 
-				// save for npc executions
+				attacker.UnforceStand()
 				attacker.ClearParent()
+				ClearPlayerAnimViewEntity( attacker )
+				attacker.PlayerMelee_ExecutionEndAttacker()
 				ForceTitanSustainedDischargeEnd( attacker )
-				if( attacker.IsPlayer() )
-				{
-					attacker.UnforceStand()
-					ClearPlayerAnimViewEntity( attacker )
-					attacker.PlayerMelee_ExecutionEndAttacker()
-					DeployViewModelAndEnableWeapons( attacker )
-				}
-				else
-				{
-					EnableWeapons( attacker, [] )
-					//Highlight_ClearEnemyHighlight( attacker ) // this only resets victim's highlights for some reason
-				}
-
-				// changed for npc executions
-				//attacker.UnforceStand()
-				//attacker.ClearParent()
-				//ClearPlayerAnimViewEntity( attacker )
-				//attacker.PlayerMelee_ExecutionEndAttacker()
-				//ForceTitanSustainedDischargeEnd( attacker )
-				//DeployViewModelAndEnableWeapons( attacker ) //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
-				
+				DeployViewModelAndEnableWeapons( attacker ) //Melee anims need to use this to stop players from firing weapons but for the weapon to still show up in the 3p anims
 				if ( IsAlive( attacker ) )
 				{
 					if ( !isAttackerRef && IsValid( target ) )
@@ -1528,9 +1185,7 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 
 					if ( attacker.IsTitan() )
 					{
-						// changed for npc executions
-						if( attacker.IsPlayer() )
-							Remote_CallFunction_Replay( attacker, "SCB_PlayTitanCockpitSounds" )
+						Remote_CallFunction_Replay( attacker, "SCB_PlayTitanCockpitSounds" )
 						#if TITAN_EXECUTION_GIVES_BATTERY
 							Rodeo_GiveExecutingTitanABattery( attacker )
 						#else
@@ -1556,12 +1211,9 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 
 			if ( IsValid( target ) )
 			{
-				if ( HasAnimEvent( target, "melee_killed_ragdoll" ) )
-					DeleteAnimEvent( target, "melee_killed_ragdoll" )
-				if ( HasAnimEvent( target, "execution_battery_show" ) )
-					DeleteAnimEvent( target, "execution_battery_show" )
-				if ( HasAnimEvent( target, "execution_battery_hide" ) )
-					DeleteAnimEvent( target, "execution_battery_hide" )
+				DeleteAnimEvent( target, "melee_killed_ragdoll" )
+				DeleteAnimEvent( target, "execution_battery_show" )
+				DeleteAnimEvent( target, "execution_battery_hide" )
 
 
 				if ( HasAnimEvent( target, "rider_rodeo_over" ) )
@@ -1600,10 +1252,8 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 			if ( IsValid( attackerViewBody ) )
 			{
 				//DeleteAnimEvent( attackerViewBody, "rodeo_battery_rip" )
-				if( HasAnimEvent( attackerViewBody, "execution_battery_pilot" ) )
-					DeleteAnimEvent( attackerViewBody, "execution_battery_pilot" )
-				if( HasAnimEvent( attackerViewBody, "execution_battery_pilot_jump_jets" ) )
-					DeleteAnimEvent( attackerViewBody, "execution_battery_pilot_jump_jets" )
+				DeleteAnimEvent( attackerViewBody, "execution_battery_pilot" )
+				DeleteAnimEvent( attackerViewBody, "execution_battery_pilot_jump_jets" )
 				attackerViewBody.Hide()
 				attackerViewBody.Destroy()
 			}
@@ -1621,14 +1271,6 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 	if ( IsValid( bossPlayer ) ) //Executing an auto-Titan, when the pilot disconnects it destroys the auto-titan creating weird circumstances.
 		bossPlayer.EndSignal( "OnDestroy" )
 	target.EndSignal( "OnDestroy" )
-	// fix for modified deathcam: player can respawn before attacker sequence ends, causes them being killed again, or cause PutEntityInSafeSpot() teleports attacker
-	// needs to end execution if target respawned
-	if ( target.IsPlayer() )
-	{
-		// make respawning cleans up execution
-		EndThreadOnPlayerRespawn( target )
-	}
-	//
 
 	if ( isAttackerRef )
 	{
@@ -1711,16 +1353,6 @@ void function TitanVsTitan_3p( SyncedMelee action, entity attacker, entity targe
 		waitthread FirstPersonSequence( attackerSequence, attacker, target )
 	}
 }
-
-// fix for modified deathcam: player can respawn before attacker sequence ends, causes them being killed again, or cause PutEntityInSafeSpot() teleports attacker
-// needs to end execution if target respawned
-void function EndThreadOnPlayerRespawn( entity player )
-{
-	player.EndSignal( "RespawnMe" )
-	player.EndSignal( "OnRespawned" )
-	player.EndSignal( "PlayerRespawnStarted" )
-}
-//
 
 void function Execution_ShowBattery( entity titan )
 {
@@ -1849,20 +1481,12 @@ void function TitanLostArm( entity titan )
 	e.lostArm = true
 }
 
-void function MeleeKilledRagdoll( entity titan ) // this is actually "pilot" inside the titan 
+void function MeleeKilledRagdoll( entity titan )
 {
 	entity attacker = expect entity( GetOptionalAnimEventVar( titan, "melee_killed_ragdoll" ) )
 
 	if ( !IsValid( attacker ) )
 		return
-	if( !IsAlive( titan ) )
-	{
-		if( !titan.IsPlayer() )
-			return
-		titan = titan.GetPetTitan()
-		if( IsAlive( titan ) )
-			titan.Die( attacker, attacker, { scriptType = DF_MELEE, damageSourceId = eDamageSourceId.titan_execution } )
-	}
 	titan.Die( attacker, attacker, { scriptType = DF_MELEE, damageSourceId = eDamageSourceId.titan_execution } )
 	titan.SetContinueAnimatingAfterRagdoll( true )
 	titan.BecomeRagdoll( < 0, 0, 0 >, false )
@@ -1886,35 +1510,13 @@ void function OnNPCTitanSignalDeath( entity titan ) //Debug function, for bug 12
 void function Northstar_Rocket_Pod_Left( entity guy )
 {
 	entity victim = expect entity( GetOptionalAnimEventVar( guy, "rocket_pod_fire_left" ) )
-	// defensive fixes here, for ronin usage
-	//Rocket_Pod( guy, "muzzle_flash", victim )
-	string tag = "muzzle_flash" // default, left rocket pod
-	int attachID = guy.LookupAttachment( tag )
-	if ( attachID <= 0 ) // not valid!
-	{
-		tag = "HAND_L" // try to use left hand
-		attachID = guy.LookupAttachment( tag )
-		if ( attachID <= 0 ) // still not valid!
-			return
-	}
-	Rocket_Pod( guy, tag, victim )
+	Rocket_Pod( guy, "muzzle_flash", victim )
 }
 
 void function Northstar_Rocket_Pod_Right( entity guy )
 {
 	entity victim = expect entity( GetOptionalAnimEventVar( guy, "rocket_pod_fire_right" ) )
-	// defensive fixes here, for ronin usage
-	//Rocket_Pod( guy, "muzzle_flash2", victim )
-	string tag = "muzzle_flash2" // default, right rocket pod
-	int attachID = guy.LookupAttachment( tag )
-	if ( attachID <= 0 ) // not valid!
-	{
-		tag = "HAND_R" // try to use right hand
-		attachID = guy.LookupAttachment( tag )
-		if ( attachID <= 0 ) // still not valid!
-			return
-	}
-	Rocket_Pod( guy, tag, victim )
+	Rocket_Pod( guy, "muzzle_flash2", victim )
 }
 
 void function Rocket_Pod( entity guy, string tag, entity victim )
@@ -1947,184 +1549,3 @@ void function Rocket_Pod( entity guy, string tag, entity victim )
 	if ( oldOffhandWeapon )
  		guy.GiveOffhandWeapon( oldOffhandWeapon.GetWeaponClassName(), 0, oldOffhandWeapon.GetMods() )
 }
-
-
-////////////////////
-///// MODIFIED /////
-////////////////////
-#if MP
-void function ExecutedTitanDropWeapon( entity titan )
-{
-	thread ExecutedTitanDropWeapon_Threaded( titan )
-}
-
-void function ExecutedTitanDropWeapon_Threaded( entity titan )
-{
-	if ( titan.GetMainWeapons().len() == 0 )
-		return
-
-	titan.EndSignal( "OnDestroy" )
-	titan.EndSignal( "OnDeath" ) // if titan won't drop weapon on being executed, will be handled by OnTitanKilled()
-	
-	table results = {}
-	results.droppedWeapon <- false
-
-	// create weaponProp here, to prevent messed up by AE_DROP_WEAPON, hide it for now
-	if ( !TitanPick_ShouldTitanDropWeapon( titan ) )
-		return
-	entity weaponProp = TitanPick_TitanDropWeapon( titan )
-	if ( !IsValid( weaponProp ) )
-		return
-	weaponProp.NotSolid() // prevent it mess up execution
-	weaponProp.Hide()
-	weaponProp.UnsetUsable()
-	// don't drop weapon again for this soul
-	entity soul = titan.GetTitanSoul()
-	if ( IsValid( soul ) )
-		TitanPick_SoulSetEnableWeaponDrop( soul, false )
-
-	OnThreadEnd
-	(
-		function(): ( weaponProp, results )
-		{
-			if ( IsValid( weaponProp ) )
-			{
-				if ( results.droppedWeapon ) // dropped another weapon in this func?
-				{
-					//print( "should destroy existing weaponProp!" )
-					weaponProp.Destroy()
-					return
-				}
-				// show weaponProp again
-				weaponProp.Solid()
-				weaponProp.Show()
-				weaponProp.SetUsable()
-			}
-		}
-	)
-
-	entity weaponToDrop = titan.GetMainWeapons()[0]
-	string name = weaponToDrop.GetWeaponClassName()
-	array<string> mods = weaponToDrop.GetMods()
-	int skin = weaponToDrop.GetSkin()
-	int camo = weaponToDrop.GetCamo()
-	int ammoLeft = 0
-	try { ammoLeft = weaponToDrop.GetWeaponPrimaryClipCount() }
-    catch(ex) {}
-
-	// manually handle AE_DROP_WEAPON, wait for this weapon being dropped, then create a new one and drop it
-	while ( TitanHasWeaponEntity( titan, weaponToDrop ) )
-		WaitFrame()
-	
-	// AE_DROP_WEAPON triggered! re-enable weapon drop
-	if ( IsValid( soul ) )
-		TitanPick_SoulSetEnableWeaponDrop( soul, true )
-
-	//print( "TitanPick_ShouldTitanDropWeapon( titan ): " + string( TitanPick_ShouldTitanDropWeapon( titan ) ) )
-	if ( !TitanPick_ShouldTitanDropWeapon( titan ) )
-		return
-
-	//print( "Titan dropped weapon for being executed" )
-	// temp give a weapon
-	foreach ( entity weapon in titan.GetMainWeapons() )
-		titan.TakeWeapon( weapon.GetWeaponClassName() )
-	entity newWeapon = titan.GiveWeapon( name, mods )
-	newWeapon.SetSkin( skin )
-	newWeapon.SetCamo( camo )
-	try { newWeapon.SetWeaponPrimaryClipCount( ammoLeft ) }
-	catch(ex1) {}
-
-	TitanPick_TitanDropWeapon( titan ) // drop this weapon
-	results.droppedWeapon = true // mark as we dropped weapon!
-	newWeapon.Destroy()
-
-	// don't drop weapon again for this soul
-	if ( IsValid( soul ) )
-		TitanPick_SoulSetEnableWeaponDrop( soul, false )
-}
-
-bool function TitanHasWeaponEntity( entity titan, entity weapon )
-{
-	foreach ( entity holdingWeapon in titan.GetMainWeapons() )
-	{
-		//print( "holdingWeapon: " + string( holdingWeapon ) )
-		//print( "weapon: " + string( weapon ) )
-		if ( holdingWeapon == weapon )
-			return true
-	}
-	return false
-}
-#endif
-
-//
-void function MeleeSyncedTitan_ExecutionNotInvulnerable( bool notInvulnerable )
-{
-	file.titanExecutionNotInvulnerable = notInvulnerable
-}
-
-void function MeleeSyncedTitan_SetSoulDoClassicExecution( entity titanSoul, bool doClassic )
-{
-	if ( !( titanSoul in file.soulDoClassicExecution ) )
-		file.soulDoClassicExecution[ titanSoul ] <- false // default value
-	file.soulDoClassicExecution[ titanSoul ] = doClassic
-}
-
-bool function GetSoulDoClassicExecution( entity titanSoul )
-{
-	if ( !( titanSoul in file.soulDoClassicExecution ) )
-		return false // default value
-	return file.soulDoClassicExecution[ titanSoul ]
-}
-
-void function MeleeSyncedTitan_DisableVanguardKitExecution( bool disable )
-{
-	file.disableVanguardKit = disable
-}
-
-void function MeleeSyncedTitan_SetSoulUseExecutionCallback( entity titanSoul, bool useCallback )
-{
-	if ( !( titanSoul in file.soulUseExecutionCallback ) )
-		file.soulUseExecutionCallback[ titanSoul ] <- true // default value
-	file.soulUseExecutionCallback[ titanSoul ] = useCallback
-}
-
-bool function GetSoulUseExecutionCallback( entity titanSoul )
-{
-	if ( !( titanSoul in file.soulUseExecutionCallback ) )
-		return true // default value
-	return file.soulUseExecutionCallback[ titanSoul ]
-}
-
-void function MeleeSyncedTitan_SetSoulShouldReplaceLoadoutOnExecution( entity titanSoul, bool useCallback )
-{
-	if ( !( titanSoul in file.soulShouldReplaceLoadout ) )
-		file.soulShouldReplaceLoadout[ titanSoul ] <- false // default value
-	file.soulShouldReplaceLoadout[ titanSoul ] = useCallback
-}
-
-bool function GetSoulReplaceLoadoutOnExecution( entity titanSoul )
-{
-	if ( !( titanSoul in file.soulShouldReplaceLoadout ) )
-		return false // default value
-	return file.soulShouldReplaceLoadout[ titanSoul ]
-}
-
-// shared with sh_melee_titan.gnut
-void function MeleeSyncedTitan_SetSoulCanBeExecuted( entity soul, bool canBeExecuted )
-{
-	if ( !( soul in file.soulCanBeExecuted ) )
-		file.soulCanBeExecuted[ soul ] <- true // default value
-	file.soulCanBeExecuted[ soul ] = canBeExecuted
-}
-
-bool function MeleeSyncedTitan_SoulCanBeExecuted( entity soul )
-{
-	if ( !IsValid( soul ) ) // soul invalid?
-		return false
-	if ( !( soul in file.soulCanBeExecuted ) ) // no settings
-		return true // default value
-	return file.soulCanBeExecuted[ soul ]
-}
-///////////////
-///// END /////
-///////////////

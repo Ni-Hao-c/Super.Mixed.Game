@@ -1,6 +1,7 @@
 global function AiGameModes_Init
 
-global function AiGameModes_SetNPCWeapons
+global function AiGameModes_SetGruntWeapons
+global function AiGameModes_SetSpectreWeapons
 
 global function AiGameModes_SpawnDropShip
 global function AiGameModes_SpawnDropPod
@@ -14,21 +15,25 @@ const INTRO_DROPSHIP_CUTOFF = 2000
 
 struct
 {
-	table< string, array<string> > npcWeaponsTable // npcs have their default weapon in aisettings file
+	array< string > gruntWeapons = [ "mp_weapon_rspn101" ]
+	array< string > spectreWeapons = [ "mp_weapon_hemlok_smg" ]
 } file
 
 void function AiGameModes_Init()
 {
-	
+
 }
 
 //------------------------------------------------------
 
-void function AiGameModes_SetNPCWeapons( string npcClass, array<string> weapons )
+void function AiGameModes_SetGruntWeapons( array< string > weapons )
 {
-	if ( !( npcClass in file.npcWeaponsTable ) )
-		file.npcWeaponsTable[ npcClass ] <- []
-	file.npcWeaponsTable[ npcClass ] = weapons
+	file.gruntWeapons = weapons
+}
+
+void function AiGameModes_SetSpectreWeapons( array< string > weapons )
+{
+	file.spectreWeapons = weapons
 }
 
 //------------------------------------------------------
@@ -54,7 +59,7 @@ void function AiGameModes_SpawnDropShip( vector pos, vector rot, int team, int c
 	
 	foreach ( guy in guys )
 	{
-		SetUpNPCWeapons( guy )
+		ReplaceWeapon( guy, file.gruntWeapons[ RandomInt( file.gruntWeapons.len() ) ], [] )
 		guy.EnableNPCFlag( NPC_ALLOW_PATROL | NPC_ALLOW_INVESTIGATE | NPC_ALLOW_HAND_SIGNALS | NPC_ALLOW_FLEE )
 	}
 	
@@ -63,23 +68,31 @@ void function AiGameModes_SpawnDropShip( vector pos, vector rot, int team, int c
 }
 
 
-void function AiGameModes_SpawnDropPod( vector pos, vector rot, int team, string content /*( ͡° ͜ʖ ͡°)*/, void functionref( array<entity> guys ) squadHandler = null, int droppodFlag = 0 )
+void function AiGameModes_SpawnDropPod( vector pos, vector rot, int team, string content /*( ͡° ͜ʖ ͡°)*/, void functionref( array<entity> guys ) squadHandler = null )
 {
-	entity pod = CreateDropPod( pos, <0,0,0> )
-	
-	InitFireteamDropPod( pod, droppodFlag )
-		
-	waitthread LaunchAnimDropPod( pod, "pod_testpath", pos, rot )
-
 	string squadName = MakeSquadName( team, UniqueString( "" ) )
 	array<entity> guys
+	
+	entity pod = CreateDropPod( pos, <0,0,0> )
+	
+	InitFireteamDropPod( pod )
+	
 	for ( int i = 0; i < 4 ;i++ )
 	{
 		entity npc = CreateNPC( content, team, pos,<0,0,0> )
 		DispatchSpawn( npc )
 		SetSquad( npc, squadName )
 		
-		SetUpNPCWeapons( npc )
+		switch ( content )
+		{
+			case "npc_soldier":
+				ReplaceWeapon( npc, file.gruntWeapons[ RandomInt( file.gruntWeapons.len() ) ], [] )
+				break
+				
+			case "npc_spectre":
+				ReplaceWeapon( npc, file.spectreWeapons[ RandomInt( file.spectreWeapons.len() ) ], [] )
+				break
+		}
 		
 		npc.SetParent( pod, "ATTACH", true )
 		
@@ -87,27 +100,25 @@ void function AiGameModes_SpawnDropPod( vector pos, vector rot, int team, string
 		guys.append( npc )
 	}
 	
-	ActivateFireteamDropPod( pod, guys )
-
-	// start searching for enemies
+	// The order here is different so we can show on minimap while were still falling
 	if ( squadHandler != null )
 		thread squadHandler( guys )
+		
+	waitthread LaunchAnimDropPod( pod, "pod_testpath", pos, rot )
+	
+	ActivateFireteamDropPod( pod, guys )
 }
 
-const float REAPER_WARPFALL_DELAY = 4.7 // same as fd does
 void function AiGameModes_SpawnReaper( vector pos, vector rot, int team, string aiSettings = "", void functionref( entity reaper ) reaperHandler = null )
 {
-	float reaperLandTime = REAPER_WARPFALL_DELAY + 1.2 // reaper takes ~1.2s to warpfall
-	thread HotDrop_Spawnpoint( pos, team, reaperLandTime, false, damagedef_reaper_fall )
+	thread Reaper_Spawnpoint( pos, team, 11.2 )
 
-	wait REAPER_WARPFALL_DELAY
+	wait 10
+	// spawn reapers right before it warpfalls, or round_end clean up will crash the game
 	entity reaper = CreateSuperSpectre( team, pos, rot )
-	reaper.EndSignal( "OnDestroy" )
 	// reaper highlight
 	Highlight_SetFriendlyHighlight( reaper, "sp_enemy_pilot" )
 	reaper.Highlight_SetParam( 1, 0, < 1,1,1 > )
-	reaper.e.hasDefaultEnemyHighlight = true // mark them as hasDefaultHighlight, so they'll save highlights after phase shift
-	SetDefaultMPEnemyHighlight( reaper )
 	Highlight_SetEnemyHighlight( reaper, "enemy_titan" )
 
 	SetSpawnOption_Titanfall( reaper )
@@ -116,73 +127,51 @@ void function AiGameModes_SpawnReaper( vector pos, vector rot, int team, string 
 	if ( aiSettings != "" )
 		SetSpawnOption_AISettings( reaper, aiSettings )
 	
-	HideName( reaper ) // prevent flash a name onto it
 	DispatchSpawn( reaper )
-
-	reaper.WaitSignal( "WarpfallComplete" )
-	ShowName( reaper ) // show name again after drop
+	
 	
 	if ( reaperHandler != null )
 		thread reaperHandler( reaper )
 }
 
 // copied from cl_replacement_titan_hud.gnut
-void function HotDrop_Spawnpoint( vector origin, int team, float impactTime, bool hasFriendlyWarning = false, int damageDef = -1 )
+void function Reaper_Spawnpoint( vector origin, int team, float impactTime, bool hasFriendlyWarning = false )
 {
 	array<entity> targetEffects = []
 	vector surfaceNormal = < 0, 0, 1 >
 
 	int index = GetParticleSystemIndex( $"P_ar_titan_droppoint" )
 
-	if( hasFriendlyWarning || FriendlyFire_IsEnabled() ) // also warn friendly players, if we enabled friendly fire...
+	if( hasFriendlyWarning )
 	{
 		entity effectFriendly = StartParticleEffectInWorld_ReturnEntity( index, origin, surfaceNormal )
 		SetTeam( effectFriendly, team )
-		EffectSetControlPointVector( effectFriendly, 1, FRIENDLY_COLOR_FX )
+		EffectSetControlPointVector( effectFriendly, 1, < 128,188,255 > )
 		effectFriendly.kv.VisibilityFlags = ENTITY_VISIBLE_TO_FRIENDLY
-		effectFriendly.DisableHibernation() // prevent it from fading out
 		targetEffects.append( effectFriendly )
 	}
 
 	entity effectEnemy = StartParticleEffectInWorld_ReturnEntity( index, origin, surfaceNormal )
 	SetTeam( effectEnemy, team )
-	EffectSetControlPointVector( effectEnemy, 1, ENEMY_COLOR_FX )
+	EffectSetControlPointVector( effectEnemy, 1, < 255,99,0 > )
 	effectEnemy.kv.VisibilityFlags = ENTITY_VISIBLE_TO_ENEMY
-	effectEnemy.DisableHibernation() // prevent it from fading out
 	targetEffects.append( effectEnemy )
-
-	// so enemy npcs will mostly avoid them
-	entity damageAreaInfo
-	if ( damageDef > -1 )
-	{
-		damageAreaInfo = CreateEntity( "info_target" )
-		DispatchSpawn( damageAreaInfo )
-		int dangerousTeam = FriendlyFire_IsEnabled() ? TEAM_BOTH : team // add friendlyfire support: if we enabled friendlyfire, this dangerous area will work for friendly npcs
-		AI_CreateDangerousArea_DamageDef( damageDef, damageAreaInfo, dangerousTeam, true, true )
-	}
-
+	
 	wait impactTime
 
-	// clean up
 	foreach( entity targetEffect in targetEffects )
 	{
 		if ( IsValid( targetEffect ) )
 			EffectStop( targetEffect )
 	}
-	if ( IsValid( damageAreaInfo ) )
-		damageAreaInfo.Destroy()
 }
 
 // including aisettings stuff specifically for at bounty titans
-const float TITANFALL_WARNING_DURATION = 5.0
 void function AiGameModes_SpawnTitan( vector pos, vector rot, int team, string setFile, string aiSettings = "", void functionref( entity titan ) titanHandler = null )
 {
 	entity titan = CreateNPCTitan( setFile, TEAM_BOTH, pos, rot )
 	SetSpawnOption_Titanfall( titan )
 	SetSpawnOption_Warpfall( titan )
-
-	// modified: do a hotdrop spawnpoint warning
-	thread HotDrop_Spawnpoint( pos, team, TITANFALL_WARNING_DURATION, false, damagedef_titan_fall )
 	
 	if ( aiSettings != "" )
 		SetSpawnOption_AISettings( titan, aiSettings )
@@ -193,27 +182,12 @@ void function AiGameModes_SpawnTitan( vector pos, vector rot, int team, string s
 		thread titanHandler( titan )
 }
 
-void function SetUpNPCWeapons( entity guy )
+// entity.ReplaceActiveWeapon gave grunts archers sometimes, this is my replacement for it
+void function ReplaceWeapon( entity guy, string weapon, array<string> mods )
 {
-	string className = guy.GetClassName()
-	
-	array<string> mainWeapons
-	if ( className in file.npcWeaponsTable )
-		mainWeapons = file.npcWeaponsTable[ className ]
-	
-	if ( mainWeapons.len() == 0 ) // no valid weapons
-		return
-
-	// take off existing main weapons, or sometimes they'll have a archer by default
-	foreach ( entity weapon in guy.GetMainWeapons() )
-		guy.TakeWeapon( weapon.GetWeaponClassName() )
-
-	if ( mainWeapons.len() > 0 )
-	{
-		string weaponName = mainWeapons[ RandomInt( mainWeapons.len() ) ]
-		guy.GiveWeapon( weaponName )
-		guy.SetActiveWeaponByName( weaponName )
-	}
+	guy.TakeActiveWeapon()
+	guy.GiveWeapon( weapon, mods )
+	guy.SetActiveWeaponByName( weapon )
 }
 
 // Checks if we can spawn a dropship at a node, this should guarantee dropship ziplines

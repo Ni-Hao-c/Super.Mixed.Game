@@ -1,26 +1,17 @@
 untyped
 global function GamemodeMfd_Init
 
-global function Modded_Gamemode_Zombie_Mfd_Init
-
 struct {
 	entity imcLastMark
 	entity militiaLastMark
 	bool isMfdPro
-
-	bool isZombieMfd = false
-	float zombieHealthRegenDelay = 1.0
-	float zombieHealthRegenRate = 50
 } file
-
-void function Modded_Gamemode_Zombie_Mfd_Init()
-{
-	file.isZombieMfd = true
-}
 
 void function GamemodeMfd_Init()
 {
 	GamemodeMfdShared_Init()
+		
+	SetShouldPlayDefaultMusic( false )
 
 	RegisterSignal( "MarkKilled" )
 	ScoreEvent_SetupEarnMeterValuesForMixedModes()
@@ -38,20 +29,6 @@ void function GamemodeMfd_Init()
 	AddCallback_OnClientConnected( SetupMFDPlayer )
 	AddCallback_OnPlayerKilled( UpdateMarksForKill )
 	AddCallback_GameStateEnter( eGameState.Playing, CreateInitialMarks )
-
-	if( file.isZombieMfd )
-	{
-		RegisterSignal( "StartZombieSounds" )
-		RegisterSignal( "EndZombieSounds" )
-		RegisterSignal( "ZMfdHealthRegenThink" )
-		AddCallback_OnClientConnected( SetupZMFDPlayer )
-		AddCallback_GameStateEnter( eGameState.Prematch, SetupZMfdIntro )
-		SetPlayerDeathsHidden( true ) // no sounds for deaths
-		SetWeaponDropsEnabled( false )
-		SetLoadoutGracePeriodEnabled( false )
-		AddCallback_OnPlayerRespawned( SetupZombieLoadoutForRespawn ) // don't use GetsNewPilotLoadout() since we need it to give VIPs loadout
-		AddCallback_GameStateEnter( eGameState.Playing, SetupZombieLoadoutForIntro )
-	}
 }
 
 void function SetupMFDPlayer( entity player )
@@ -132,15 +109,6 @@ void function MFDThink()
 				MessageToAll( eEventNotifications.MarkedForDeathMarkedDisconnected )
 				break
 			}
-			
-			//if( HackedDeath_IsEnabled() ) // temp fix, should remove after successfully adjust "IsAlive()"
-			//{
-			//	if( expect bool( imcMark.s.hackedDeath ) || expect bool( militiaMark.s.hackedDeath ) )
-			//	{
-			//		WaitFrame()
-			//		continue
-			//	}
-			//}
 				
 			WaitFrame()
 		}
@@ -221,15 +189,6 @@ void function MarkPlayers( entity imcMark, entity militiaMark )
 	
 	foreach ( entity player in GetPlayerArray() )
 		Remote_CallFunction_NonReplay( player, "SCB_MarkedChanged" )
-
-	if( file.isZombieMfd )
-	{
-		foreach ( entity player in GetPlayerArray() )
-		{
-			if( player == imcMark || player == militiaMark )
-				MakePlayerVIP( player )
-		}
-	}
 		
 	// wait until mark dies
 	table result = svGlobal.levelEnt.WaitSignal( "MarkKilled" )
@@ -255,12 +214,6 @@ void function MarkPlayers( entity imcMark, entity militiaMark )
 	}
 	// enemies
 	PlayFactionDialogueToTeam( "mfd_markDownFriendly", deadMark.GetTeam() )
-
-	if( file.isZombieMfd )
-	{
-		if( IsAlive( livingMark ) )
-			MakePlayerZombie( livingMark )
-	}
 
 	// thread this so we don't kill our own thread
 	thread AddTeamScore( livingMark.GetTeam(), 1 )
@@ -301,242 +254,4 @@ void function UpdateMarksForKill( entity victim, entity attacker, var damageInfo
 			}
 		}
 	}
-}
-
-// zombie mfd
-void function SetupZMFDPlayer( entity player )
-{
-	player.s.isZombie <- false
-	player.s.damagedHealth <- 0
-	AddEntityCallback_OnDamaged( player, OnZMfdPlayerDamaged )
-	SendModeRulesToPlayer( player )
-}
-
-void function SetupZombieLoadoutForRespawn( entity player )
-{
-	if( GetGameState() == eGameState.Prematch )
-		return
-	SetupZombieLoadout( player )
-}
-
-void function SetupZombieLoadout( entity player )
-{
-	thread DisableBoostBar( player )
-	MakePlayerZombie( player )
-	player.Signal( "StopHealthRegenThink" )
-	thread ZMfdHealthRegenThink( player )
-}
-
-void function SetupZombieLoadoutForIntro()
-{
-	foreach( entity player in GetPlayerArray() )
-	{
-		if( IsAlive( player ) )
-			SetupZombieLoadout( player )
-	}
-}
-
-void function MakePlayerVIP( entity player )
-{
-	player.s.isZombie = false // for health regen
-	player.s.damagedHealth = 0
-	EndlessStimEnd( player ) // stop stim
-	player.Signal( "EndZombieSounds" )
-	Loadouts_TryGivePilotLoadout( player )
-	player.TakeWeaponNow( player.GetOffhandWeapon( OFFHAND_MELEE ).GetWeaponClassName() )
-	thread GiveAirAccel( player, 500 )
-
-	// set camo to white
-	player.SetSkin( 1 )
-	player.SetCamo( 31 )
-
-	player.SetMaxHealth( 100 )
-	player.SetHealth( 100 )
-}
-
-void function MakePlayerZombie( entity player )
-{
-	player.s.isZombie = true // for health regen
-	player.s.damagedHealth = 0
-	// set camo to pond scum
-	player.SetSkin( 1 )
-	player.SetCamo( 110 )
-
-	// if human, remove helmet bodygroup, human models have some weird bloody white thing underneath their helmet that works well for this, imo
-	if ( !player.IsMechanical() )
-		player.SetBodygroup( player.FindBodyGroup( "head" ), 1 )
-
-	// stats for infected
-	EndlessStimBegin( player, 0.25 )
-	thread DelayedClearStimSound( player )
-
-	player.SetMaxHealth( 50 )
-	player.SetHealth( 50 )
-
-	// set loadout
-	foreach ( entity weapon in player.GetMainWeapons() )
-		player.TakeWeaponNow( weapon.GetWeaponClassName() )
-
-	foreach ( entity weapon in player.GetOffhandWeapons() )
-		player.TakeWeaponNow( weapon.GetWeaponClassName() )
-
-	// TEMP: give archer so player so player has a weapon which lets them use offhands
-	// need to replace this with a custom empty weapon at some point
-	//player.GiveWeapon( "mp_weapon_rocket_launcher" )
-	player.GiveWeapon( "mp_weapon_gunship_missile", ["melee_convertor"] )
-	player.GiveOffhandWeapon( "melee_pilot_emptyhanded", OFFHAND_MELEE, ["pushback_melee", "fake_human_melee", "jetpack_fx_melee"] ) // was "apex_melee", "zombie_craw"
-	player.GiveOffhandWeapon( "mp_weapon_grenade_sonar", OFFHAND_SPECIAL, ["ninja_projectile"] ) // removed "zombie_knife"
-	//player.GiveOffhandWeapon( "mp_weapon_grenade_gravity", OFFHAND_ORDNANCE, ["ninja_projectile"] )
-	player.GiveOffhandWeapon( "mp_weapon_grenade_emp", OFFHAND_ORDNANCE, ["impulse_grenade"] )
-
-	thread GiveAirAccel( player, 1000 )
-	thread PlayInfectedSounds( player )
-}
-
-void function DelayedClearStimSound( entity player )
-{
-	wait 0.1
-	if( IsValid( player ) )
-	{
-		StopSoundOnEntity( player, "pilot_stimpack_loop_1P" ) // better don't use this, this will turn up all volumes
-		StopSoundOnEntity( player, "pilot_stimpack_loop_3P" )
-	}
-}
-
-void function GiveAirAccel( entity player, float amount )
-{
-	WaitFrame()
-	if( IsValid( player ) )
-		player.kv.airAcceleration = amount
-}
-
-void function PlayInfectedSounds( entity player )
-{
-	player.Signal( "StartZombieSounds" )
-	player.EndSignal( "OnDeath" )
-	player.EndSignal( "OnDestroy" )
-	player.EndSignal( "StartZombieSounds" )
-	player.EndSignal( "EndZombieSounds" )
-
-	float nextRandomSound
-	while ( true )
-	{
-		wait max( 2.5, RandomFloat( 12.0 ) ) // wait goes first so player won't hear this till they able to running around
-		string selectedSound
-		if ( CoinFlip() )
-			selectedSound = "prowler_vocal_attack"
-		else
-			selectedSound = "prowler_vocal_attackmiss"
-
-		bool canSeeEnemy
-		foreach ( entity survivor in GetPlayerArrayOfEnemies_Alive( player.GetTeam() ) )
-			if ( TraceLineSimple( player.GetOrigin(), survivor.GetOrigin(), survivor ) == 1.0 )
-				canSeeEnemy = true
-
-		// _int sounds are less agressive so only play them if we aren't in some sorta fight
-		if ( player.GetHealth() == player.GetMaxHealth() || !canSeeEnemy )
-			selectedSound += "_int"
-
-		EmitSoundOnEntity( player, selectedSound )
-	}
-}
-
-void function OnZMfdPlayerDamaged( entity victim, var damageInfo )
-{
-	entity attacker = DamageInfo_GetAttacker( damageInfo )
-	if( IsValid( attacker ) )
-	{
-		if( attacker.IsPlayer() )
-		{
-			if( attacker.s.isZombie && !victim.s.isZombie && attacker != victim )
-				victim.s.damagedHealth += DamageInfo_GetDamage( damageInfo )
-			else if( attacker.s.isZombie && victim.s.isZombie && DamageInfo_GetDamage( damageInfo ) >= 20 ) // hardcoded for now
-				DamageInfo_SetDamage( damageInfo, 999 ) // melee or knives instant kills a zombie
-		}
-	}
-}
-
-void function ZMfdHealthRegenThink( entity player )
-{
-	player.EndSignal( "OnDestroy" )
-	player.Signal( "ZMfdHealthRegenThink" )
-	player.EndSignal( "ZMfdHealthRegenThink" )
-	player.EndSignal( "StopHealthRegenThink" ) // modify for having different health regen function for each player
-
-	while ( IsValid( player ) )
-	{
-		wait( HEALTH_REGEN_TICK_TIME )
-
-		if ( !IsAlive( player ) )
-			continue
-
-		if ( !IsPilot( player ) )
-			continue
-
-		if ( shGlobal.proto_pilotHealthRegenDisabled )
-			continue
-
-		float healthRegenStartDelay = 2.5
-		if( player.s.isZombie )
-			healthRegenStartDelay = file.zombieHealthRegenDelay
-
-		float healthRegenRate = 6.0 	// health regen per tick
-		if( player.s.isZombie )
-			healthRegenRate = file.zombieHealthRegenRate
-
-		if ( player.GetHealth() == player.GetMaxHealth() - player.s.damagedHealth )
-			continue
-
-		// No regen during phase shift
-		if ( player.IsPhaseShifted() )
-			continue
-
-		else if ( Time() - player.p.lastDamageTime < healthRegenStartDelay )
-		{
-			continue
-		}
-
-		player.SetHealth( min( player.GetMaxHealth() - player.s.damagedHealth, player.GetHealth() + healthRegenRate ) )
-		
-		if ( player.GetHealth() == player.GetMaxHealth() )
-		{
-			ClearRecentDamageHistory( player )
-			ClearLastAttacker( player )
-		}
-	}
-}
-
-void function DisableBoostBar( entity player )
-{
-	WaitFrame()
-	if( IsValid( player ) )
-		PlayerEarnMeter_SetMode( player, eEarnMeterMode.DISABLED )
-}
-
-void function SetupZMfdIntro()
-{
-	SendModeRulesToAllPlayers()
-	foreach( entity player in GetPlayerArray() )
-	{
-		StopSoundOnEntity( player, "music_mp_mfd_intro_flyin" )
-		EmitSoundOnEntityOnlyToPlayer( player, player, "music_beacon_8a_jumpingsuccess" )
-	}
-}
-
-void function SendModeRulesToAllPlayers()
-{
-	foreach( entity player in GetPlayerArray() )
-		SendModeRulesToPlayer( player )
-}
-
-void function SendModeRulesToPlayer( entity player )
-{
-	thread SendModeRulesToPlayer_Threaded( player )
-}
-
-void function SendModeRulesToPlayer_Threaded( entity player )
-{
-	wait 1
-	if( IsValid( player ) )
-		SendHudMessage( player, "僵尸猎杀标记:\n只有被标记者为人类玩家, 其余玩家作为僵尸配合人类尝试消灭敌方标记", -1, 0.35, 255, 200, 0, 0, 0.15, 10, 0.15 )
 }

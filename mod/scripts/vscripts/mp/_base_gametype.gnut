@@ -85,12 +85,6 @@ function BaseGametype_Init()
 	BaseGametype_Init_MPSP()
 
 	AddCallback_OnTitanBecomesPilot( OnTitanBecomesPilot_OutOfBoundsCheck )
-
-	// modified!!! recover behaviors for vanilla
-	FriendlyFire_AddAllowedDamageSourceId( eDamageSourceId.switchback_trap )
-	FriendlyFire_AddAllowedDamageSourceId( eDamageSourceId.suicideSpectreAoE )
-	FriendlyFire_AddAllowedDamageSourceId( eDamageSourceId.mp_titanweapon_stun_laser ) // for energy transfer functionality. Preventing FF damage in the callback.
-	FriendlyFire_AddAllowedDamageSourceId( eDamageSourceId.mp_titanability_smoke ) // For FD Vanguard Shield Upgrades. Preventing FF damage in the callback
 }
 
 void function BaseGametypeEntitiesDidLoad()
@@ -219,10 +213,6 @@ function AddFlinch( entity attackedEnt, damageInfo )
 
 bool function IsProtectedFromFriendlyFire_MP( entity attacker, entity ent, var damageInfo )
 {
-	// modified
-	if( FriendlyFire_IsEnabled() ) // no any protection if friendly fire is on
-		return false
-
 	// no suicide protection
 	if ( attacker == ent )
 		return false
@@ -232,14 +222,6 @@ bool function IsProtectedFromFriendlyFire_MP( entity attacker, entity ent, var d
 
 	if ( DamageIgnoresFriendlyFire( damageInfo ) )
 		return false
-
-	// custom settings
-	if ( attacker in file.entitiesDoFFDamage )
-		return file.entitiesDoFFDamage[ attacker ]
-
-	if ( ent in file.entitiesTakeFFDamage )
-		return file.entitiesTakeFFDamage[ ent ]
-	//
 
 	if ( ent.GetOwner() != attacker && ent.GetBossPlayer() != attacker )
 		return true
@@ -308,48 +290,13 @@ bool function IsProtectedFromFriendlyFire_SP( entity attacker, entity ent, var d
 	return false
 }
 
-bool function DamageIgnoresFriendlyFire( damageInfo ) // can add friendly fire here!
+bool function DamageIgnoresFriendlyFire( damageInfo )
 {
 	if ( DamageInfo_GetCustomDamageType( damageInfo ) & DF_DOOMED_HEALTH_LOSS )
 		return true
 
 	int damageSourceID = DamageInfo_GetDamageSourceIdentifier( damageInfo )
-	bool shouldDoFriendlyFire = false
 
-	// modified friendly fire condition...
-	entity weapon = DamageInfo_GetWeapon( damageInfo )
-	if ( IsValid( weapon ) )
-	{
-		// mod condition
-		if( weapon.HasMod( "friendlyfire_weapon" ) ) // for buff friendly players or killing them
-			shouldDoFriendlyFire = true
-
-		// weapon uses custom settings...
-		if ( weapon in file.entitiesDoFFDamage )
-			shouldDoFriendlyFire = file.entitiesDoFFDamage[ weapon ]
-	}
-
-	// damage uses a inflictor
-	entity inflictor = DamageInfo_GetInflictor( damageInfo )
-	if ( IsValid( inflictor ) )
-	{
-		// projectile condition
-		if( inflictor.IsProjectile() )
-		{
-			if( Vortex_GetRefiredProjectileMods( inflictor ).contains( "friendlyfire_weapon" ) ) // modded weapon refire behavior
-				shouldDoFriendlyFire = true
-		}
-
-		// inflictor uses custom settings...
-		if ( inflictor in file.entitiesDoFFDamage )
-			shouldDoFriendlyFire = file.entitiesDoFFDamage[ inflictor ]
-	}
-	//
-
-	// reworked
-	if ( file.allowFFDamageSourceIds.contains( damageSourceID ) )
-		shouldDoFriendlyFire = true
-	/* // reworked to make things less hardcoded
 	switch ( damageSourceID )
 	{
 		case eDamageSourceId.switchback_trap:
@@ -358,32 +305,8 @@ bool function DamageIgnoresFriendlyFire( damageInfo ) // can add friendly fire h
 		case eDamageSourceId.mp_titanability_smoke: // For FD Vanguard Shield Upgrades. Preventing FF damage in the callback.
 			return true
 	}
-	*/
 
-	//return false
-	return shouldDoFriendlyFire
-}
-
-// modified! make friendly fire less hardcoded
-void function FriendlyFire_SetEntityDoFFDamage( entity ent, bool doDamage ) // can handle player, npc, weapon and projectiles
-{
-	if ( !( ent in file.entitiesDoFFDamage ) )
-		file.entitiesDoFFDamage[ ent ] <- false // default
-	file.entitiesDoFFDamage[ ent ] = doDamage
-}
-
-void function FriendlyFire_SetEntityTakeFFDamage( entity ent, bool takeDamage ) // mostly handle players
-{
-	if ( !( ent in file.entitiesTakeFFDamage ) )
-		file.entitiesTakeFFDamage[ ent ] <- false // default
-	file.entitiesTakeFFDamage[ ent ] = takeDamage
-}
-
-void function FriendlyFire_AddAllowedDamageSourceId( int damageSourceId )
-{
-	if ( file.allowFFDamageSourceIds.contains( damageSourceId ) )
-		return
-	file.allowFFDamageSourceIds.append( damageSourceId )
+	return false
 }
 
 bool function ScriptCallback_ShouldEntTakeDamage( entity ent, damageInfo )
@@ -444,7 +367,7 @@ bool function ScriptCallback_ShouldEntTakeDamage( entity ent, damageInfo )
 
 				if ( entIsPlayer )
 				{
-					array<string> mods = inflictor.ProjectileGetMods() // vanilla behavior, not changing to Vortex_GetRefiredProjectileMods()
+					array<string> mods = inflictor.ProjectileGetMods()
 					foreach ( mod in mods )
 					{
 						if ( mod == "jump_kit" )
@@ -836,15 +759,6 @@ bool function PlayerOrNPCKilled( entity ent, var damageInfo )
 	if ( damageSourceID == eDamageSourceId.round_end )
 		return false
 
-	// modified, defined in hacked_death_util.gnut. hardcoded
-	#if MP
-		if( HackedDeath_IsEnabled() )
-		{
-			if( damageSourceID == damagedef_despawn )
-				return false
-		}
-	#endif
-
 	entity attacker = GetAttackerOrLastAttacker( ent, damageInfo )
 	if ( !IsValid( attacker ) )
 		return false
@@ -919,10 +833,7 @@ bool function PlayerOrNPCKilled( entity ent, var damageInfo )
 	// player attacker only from here down
 
 	PreScoreEventUpdateStats( attacker, ent )
-	//if ( ent.GetTeam() != attacker.GetTeam() )
-	// adding friendlyfire support!
-	if ( ( ent.GetTeam() != attacker.GetTeam() || FriendlyFire_IsEnabled() )
-		 && ( ent != attacker && ent.GetBossPlayer() != attacker ) )
+	if ( ent.GetTeam() != attacker.GetTeam() )
 	{
 		if ( ent.IsPlayer() )
 			ScoreEvent_PlayerKilled( ent, attacker, damageInfo )
@@ -933,10 +844,7 @@ bool function PlayerOrNPCKilled( entity ent, var damageInfo )
 	}
 	PostScoreEventUpdateStats( attacker, ent )
 
-	// if ( ent.GetTeam() == attacker.GetTeam() )
-	// adding friendlyfire support!
-	if ( ( ent.GetTeam() == attacker.GetTeam() && !FriendlyFire_IsEnabled() )
-		 || ( ent == attacker || ent.GetBossPlayer() == attacker ) )
+	if ( ent.GetTeam() == attacker.GetTeam() )
 	{
 		return false
 	}
@@ -1139,12 +1047,6 @@ function PlayerWatchesKillReplay( entity player, int inflictorEHandle, int attac
 	player.SetKillReplayInflictorEHandle( inflictorEHandle )
 	player.SetKillReplayVictim( player )
 	player.SetViewIndex( attackerViewIndex )
-	
-	// modified, defined in hacked_death_util.gnut
-	#if MP
-		if( HackedDeath_IsEnabled() )
-			HackedDeath_KillPlayer( player )
-	#endif
 
 	wait timeBeforeKill
 
