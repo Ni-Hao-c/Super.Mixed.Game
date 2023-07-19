@@ -2599,6 +2599,8 @@ bool function IsSwitchSidesBased()
 
 int function HasSwitchedSides() //This returns an int instead of a bool! Should rewrite
 {
+	if ( !IsSwitchSidesBased() )
+		return 0
 	return expect int( level.nv.switchedSides )
 }
 
