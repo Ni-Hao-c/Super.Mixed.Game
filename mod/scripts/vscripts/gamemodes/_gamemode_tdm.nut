@@ -1,32 +1,14 @@
 global function GamemodeTdm_Init
 global function RateSpawnpoints_Directional
 
-// defined for PP_Gamemode_HarvesterPush.gnut
-global function PP_HarvesterPush_init
-
-struct
-{
-	bool isHarvesterPush = false
-} file
-
-void function PP_HarvesterPush_init()
-{
-    file.isHarvesterPush = true
-}
-
 void function GamemodeTdm_Init()
 {
-	if( file.isHarvesterPush ) 
-        PP_GameMode_HarvesterPush_init()
-    else
-	{
-		AddCallback_OnPlayerKilled( GiveScoreForPlayerKill )
-		ScoreEvent_SetupEarnMeterValuesForMixedModes()
-		SetTimeoutWinnerDecisionFunc( CheckScoreForDraw )
+	AddCallback_OnPlayerKilled( GiveScoreForPlayerKill )
+	ScoreEvent_SetupEarnMeterValuesForMixedModes()
+	SetTimeoutWinnerDecisionFunc( CheckScoreForDraw )
 
-		// nscn specifics
-		SetShouldPlayDefaultMusic( true )
-    }
+	// nscn specifics
+	SetShouldPlayDefaultMusic( true )
 }
 
 void function GiveScoreForPlayerKill( entity victim, entity attacker, var damageInfo )

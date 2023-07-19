@@ -33,75 +33,37 @@ struct
 	int levelReapers = LEVEL_REAPERS
 } file
 
-// modded gamemodes
-global function Modded_Gamemode_GruntMode_Enable_Init
-global function Modded_Gamemode_Extra_Spawner_Enable_Init
-global function Modded_Gamemode_AITdm_Extended_Enabled_Init
-
-struct
-{
-	bool gruntmode = false
-	bool extraSpawner = false
-	bool aitdmExtend = false
-} modGamemodes
-
-void function Modded_Gamemode_GruntMode_Enable_Init()
-{
-	modGamemodes.gruntmode = true
-}
-
-void function Modded_Gamemode_Extra_Spawner_Enable_Init()
-{
-	modGamemodes.extraSpawner = true
-}
-
-void function Modded_Gamemode_AITdm_Extended_Enabled_Init()
-{
-	modGamemodes.aitdmExtend = true
-}
-
 void function GamemodeAITdm_Init()
 {
-	// modded gamemodes
-	if( modGamemodes.gruntmode || GetCurrentPlaylistVarInt( "aitdm_grunt_mode", 0 ) != 0 )
-		Modded_Gamemode_GruntMode_Init()
-	else if( modGamemodes.extraSpawner )
-		Modded_Gamemode_Extra_Spawner_Init()
-	else if( modGamemodes.aitdmExtend || GetCurrentPlaylistVarInt( "aitdm_extended_spawns", 0 ) != 0 )
-		Modded_Gamemode_AITdm_Extended_Init()
-	else // vanilla attrition
+	SetSpawnpointGamemodeOverride( ATTRITION ) // use bounty hunt spawns as vanilla game has no spawns explicitly defined for aitdm
+
+	AddCallback_GameStateEnter( eGameState.Prematch, OnPrematchStart )
+	AddCallback_GameStateEnter( eGameState.Playing, OnPlaying )
+
+	AddCallback_OnNPCKilled( HandleScoreEvent )
+	AddCallback_OnPlayerKilled( HandleScoreEvent )
+
+	AddCallback_OnClientConnected( OnPlayerConnected )
+	
+	AddCallback_NPCLeeched( OnSpectreLeeched )
+	
+	if ( GetCurrentPlaylistVarInt( "aitdm_archer_grunts", 0 ) == 0 )
 	{
-		SetSpawnpointGamemodeOverride( ATTRITION ) // use bounty hunt spawns as vanilla game has no spawns explicitly defined for aitdm
-
-		AddCallback_GameStateEnter( eGameState.Prematch, OnPrematchStart )
-		AddCallback_GameStateEnter( eGameState.Playing, OnPlaying )
-
-		AddCallback_OnNPCKilled( HandleScoreEvent )
-		AddCallback_OnPlayerKilled( HandleScoreEvent )
-		AddCallback_OnTitanDoomed( HandleTitanDoomedScore ) // modified: for handling doomed health loss titans
-
-		AddCallback_OnClientConnected( OnPlayerConnected )
-		
-		AddCallback_NPCLeeched( OnSpectreLeeched )
-		
-		if ( GetCurrentPlaylistVarInt( "aitdm_archer_grunts", 0 ) == 0 )
-		{
-			AiGameModes_SetNPCWeapons( "npc_soldier", [ "mp_weapon_rspn101", "mp_weapon_dmr", "mp_weapon_r97", "mp_weapon_lmg" ] )
-			AiGameModes_SetNPCWeapons( "npc_spectre", [ "mp_weapon_hemlok_smg", "mp_weapon_doubletake", "mp_weapon_mastiff" ] )
-			AiGameModes_SetNPCWeapons( "npc_stalker", [ "mp_weapon_hemlok_smg", "mp_weapon_lstar", "mp_weapon_mastiff" ] )
-		}
-		else
-		{
-			AiGameModes_SetNPCWeapons( "npc_soldier", [ "mp_weapon_rocket_launcher" ] )
-			AiGameModes_SetNPCWeapons( "npc_spectre", [ "mp_weapon_rocket_launcher" ] )
-			AiGameModes_SetNPCWeapons( "npc_stalker", [ "mp_weapon_rocket_launcher" ] )
-		}
-		
-		ScoreEvent_SetupEarnMeterValuesForMixedModes()
-
-		// nscn specifics
-		SetShouldPlayDefaultMusic( true )
+		AiGameModes_SetNPCWeapons( "npc_soldier", [ "mp_weapon_rspn101", "mp_weapon_dmr", "mp_weapon_r97", "mp_weapon_lmg" ] )
+		AiGameModes_SetNPCWeapons( "npc_spectre", [ "mp_weapon_hemlok_smg", "mp_weapon_doubletake", "mp_weapon_mastiff" ] )
+		AiGameModes_SetNPCWeapons( "npc_stalker", [ "mp_weapon_hemlok_smg", "mp_weapon_lstar", "mp_weapon_mastiff" ] )
 	}
+	else
+	{
+		AiGameModes_SetNPCWeapons( "npc_soldier", [ "mp_weapon_rocket_launcher" ] )
+		AiGameModes_SetNPCWeapons( "npc_spectre", [ "mp_weapon_rocket_launcher" ] )
+		AiGameModes_SetNPCWeapons( "npc_stalker", [ "mp_weapon_rocket_launcher" ] )
+	}
+	
+	ScoreEvent_SetupEarnMeterValuesForMixedModes()
+
+	// nscn specifics
+	SetShouldPlayDefaultMusic( true )
 }
 
 // modified... really should add settings for these settings
@@ -188,12 +150,8 @@ void function HandleScoreEvent( entity victim, entity attacker, var damageInfo )
 		playerScore = 5
 	
 	// Player ejecting triggers this without the extra check
-	// modified function in _titan_health.gnut, recovering ttf1 behavior: we add score on doom but not on death for health loss titans
 	if ( victim.IsTitan() && victim.GetBossPlayer() != attacker )
-	{
-		if ( TitanHealth_GetSoulInfiniteDoomedState( victim.GetTitanSoul() ) )
-			playerScore += 10
-	}
+		playerScore += 10
 
 	AddAiTDMPlayerTeamScore( attacker, playerScore )
 }
@@ -222,20 +180,6 @@ void function AddAiTDMPlayerTeamScore( entity player, int score )
 	AddTeamScore( player.GetTeam(), score )
 	player.AddToPlayerGameStat( PGS_ASSAULT_SCORE, score )
 	player.SetPlayerNetInt( "AT_bonusPoints", player.GetPlayerGameStat( PGS_ASSAULT_SCORE ) )
-}
-
-// modified: for handling doomed health loss titans
-void function HandleTitanDoomedScore( entity victim, var damageInfo )
-{
-	entity attacker = DamageInfo_GetAttacker( damageInfo )
-	if ( !IsValid( attacker ) )
-		return
-	if ( !AttackerIsValidForAiTDMScore( victim, attacker, damageInfo ) )
-		return
-
-	// modified function in _titan_health.gnut, recovering ttf1 behavior: we add score on doom but not on death for health loss titans
-	if ( !TitanHealth_GetSoulInfiniteDoomedState( victim.GetTitanSoul() ) )
-		AddAiTDMPlayerTeamScore( attacker, 10 )
 }
 
 // When attrition starts both teams spawn ai on preset nodes, after that
@@ -441,9 +385,7 @@ void function Escalate( int team )
 // These zones should swap based on which team is dominating where
 int function GetSpawnPointIndex( array< entity > points, int team )
 {
-	// modified: make a new function so ai gamemodes don't have to re-decide for each spawn
-	//entity zone = DecideSpawnZone_Generic( points, team )
-	entity zone = GetCurrentSpawnZoneForTeam( team )
+	entity zone = DecideSpawnZone_Generic( points, team )
 	
 	if ( IsValid( zone ) )
 	{
