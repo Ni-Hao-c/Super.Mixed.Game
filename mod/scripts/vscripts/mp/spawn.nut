@@ -129,7 +129,7 @@ void function InitRatings( entity player, int team )
 entity function FindSpawnPoint( entity player, bool isTitan, bool useStartSpawnpoint )
 {
 	int team = player.GetTeam()
-	if ( HasSwitchedSides() )
+	if ( IsSwitchSidesBased() && HasSwitchedSides() )
 		team = GetOtherTeam( team )
 
 	array<entity> spawnpoints
