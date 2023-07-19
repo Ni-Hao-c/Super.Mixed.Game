@@ -593,7 +593,6 @@ void function SetPlayerCameraToIntermissionCam( entity player, float delay = 0 )
 
 	if ( file.intermissionCamera != null )
 	{
-		// player may not become spectator since death cam can be modified
 		if ( player.GetPlayerSettings() != "spectator" )
 			PlayerClassChangeToSpectator( player )
 
@@ -673,7 +672,6 @@ void function PlayerWatchesKillReplayWrapper( entity player, int inflictorEHandl
 		}
 	)
 
-	// have to be spectator before watching kill replay
 	if ( player.GetPlayerSettings() != "spectator" )
 		PlayerClassChangeToSpectator( player )
 
