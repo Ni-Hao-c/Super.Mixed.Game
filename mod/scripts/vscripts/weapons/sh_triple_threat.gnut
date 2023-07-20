@@ -50,12 +50,22 @@ function MpTitanweaponTripleThreat_Init()
 	PrecacheParticleSystem( FX_TRIPLE_IGNITION )
 	PrecacheParticleSystem( FX_TRIPLE_IGNITION_BURN )
 
-	// Northstar Specific
+	// northstarCN specific. northstar didn't support this damageSourceId
 #if SERVER
-	AddDamageCallbackSourceID( eDamageSourceId.mp_titanweapon_triplethreat, TripleThreatGrenade_DamagedPlayerOrNPC )
+	// needs to wait for eDamageSourceId.mp_titanweapon_triplethreat being registered
+	AddCallback_EntitiesDidLoad( InitTripleThreatDamageCallback )
 #endif
 	//
 }
+
+// northstarCN specific. northstar didn't support this damageSourceId
+#if SERVER
+void function InitTripleThreatDamageCallback()
+{
+	AddDamageCallbackSourceID( eDamageSourceId.mp_titanweapon_triplethreat, TripleThreatGrenade_DamagedPlayerOrNPC )
+}
+#endif
+//
 
 var function OnWeaponPrimaryAttack_titanweapon_triplethreat( entity weapon, WeaponPrimaryAttackParams attackParams )
 {
@@ -92,15 +102,19 @@ function FireTripleThreat( entity weapon, WeaponPrimaryAttackParams attackParams
 	bool shouldCreateProjectile = false
 	if ( IsServer() || weapon.ShouldPredictProjectiles() )
 		shouldCreateProjectile = true
+
+	// fix fire sound for ttf2
 	#if SERVER
-	if( weaponOwner.IsPlayer() )
-	{
-		EmitSoundOnEntityOnlyToPlayer( weapon, weaponOwner, "Weapon_MGL_Fire_1P" )
-		EmitSoundOnEntityExceptToPlayer( weapon, weaponOwner, "Weapon_MGL_Fire_3P" )
-	}
-	else
-		EmitSoundOnEntity( weaponOwner, "Weapon_MGL_Fire_3P" )
+		if( weaponOwner.IsPlayer() )
+		{
+			EmitSoundOnEntityOnlyToPlayer( weapon, weaponOwner, "Weapon_Softball_Fire_1P" ) //Weapon_MGL_Fire_1P
+			EmitSoundOnEntityExceptToPlayer( weapon, weaponOwner, "Weapon_Softball_Fire_3P" ) //Weapon_MGL_Fire_3P
+		}
+		else
+			EmitSoundOnEntity( weaponOwner, "Weapon_Softball_Fire_3P" ) //Weapon_MGL_Fire_3P
 	#endif
+	//
+
 	#if CLIENT
 		if ( !playerFired )
 			shouldCreateProjectile = false
