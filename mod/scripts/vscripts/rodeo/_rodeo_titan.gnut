@@ -44,11 +44,6 @@ global function RestorePlayerAirControl //This function should really be in a se
 // needs these
 global function Rodeo_TakeBatteryAwayFromPilot
 
-#if MP // nessie modify
-// modified, this titan won't able to be remove battery, but player can still stay on it's back. basically for bt
-global function Rodeo_SetTitanRodeoSequenceEnabled
-#endif
-
 #if DEV
 global function SetDebugRodeoPrint
 global function GetDebugRodeoPrint
@@ -106,9 +101,6 @@ struct
 	table<entity, bool> playersThatWantToUseRodeoGrenade
 
 	void functionref(entity,entity,entity) applyBatteryCallback
-
-	// modified usage
-	table <entity, bool> titanSoulRodeoSequenceEnabled
 } file
 
 //-----------------------------------------------------------------------------
@@ -703,9 +695,7 @@ function PlayerBeginsTitanRodeo( entity player, RodeoPackageStruct rodeoPackage,
 	if ( !sameTeam )
 	{
 		#if FACTION_DIALOGUE_ENABLED
-			// modified here!!! check rodeo sequence validation
-			if ( Rodeo_IsTitanRodeoSequenceEnabled( rodeoTitan ) )
-				thread PlayRodeoFactionDialogueAfterDelay( player, 0.5 )
+			thread PlayRodeoFactionDialogueAfterDelay( player, 0.5 )
 		#endif
 		TitanVO_AlertTitansTargetingThisTitanOfRodeo( player, soul )
 	}
@@ -833,10 +823,9 @@ void function TryBatteryStyleRodeo( entity rodeoPilot, entity rodeoTitan, entity
 	titanSoul.EndSignal( "OnTitanDeath" )
 
 	string rodeoTitanType = rodeoPackage.rodeoTargetType
-	bool rodeoSequenceEnabled = Rodeo_IsTitanRodeoSequenceEnabled( rodeoTitan ) // specific condition! this titan's rodeo sequence is disabled
-	if ( rodeoPilot.GetTeam() == rodeoTitan.GetTeam() || !rodeoSequenceEnabled )
+	if ( rodeoPilot.GetTeam() == rodeoTitan.GetTeam() )
 	{
-		if ( PilotCanApplyBattery( rodeoPilot, rodeoTitan ) && rodeoSequenceEnabled )
+		if ( PilotCanApplyBattery( rodeoPilot, rodeoTitan ) )
 			waitthread PlayerAppliesBatteryPack( rodeoPilot, rodeoTitan, titanSoul, rodeoPackage )
 
 		rodeoTitan = titanSoul.GetTitan()
@@ -1693,17 +1682,17 @@ void function Rodeo_DropAllBatteries( entity player )
 	if ( !PlayerHasBattery( player ) )
 		return
 
-	while ( GetPlayerBatteryCount( player ) > 1 )
+	float batteryCount = float( GetPlayerBatteryCount( player ) - 1 ) // Floats instead of ints since we need decimal values for the math
+	for ( float i = 1.0; GetPlayerBatteryCount( player ) > 1; i += 1.0 )
 	{
 		entity newBattery = Rodeo_CreateBatteryPack()
 		newBattery.s.touchEnabledTime = Time() + 0.3
-		//look into using the players bounds for placement, instead of hardcoded numbers
-		array<vector> offsets = [<0,0,0>, <30,0,0>, <0,30,0>, <0,-30,0> ]
-		newBattery.SetOrigin( player.GetWorldSpaceCenter() + offsets[ GetPlayerBatteryCount( player ) ] ) //Temp fix, should change the origin
+		vector direction = AnglesToForward( <0, i/batteryCount * 360.0, 0> )
+		newBattery.SetOrigin( player.GetWorldSpaceCenter() + direction * 30 )
 		newBattery.SetAngles( <0, 0, 0 > )
 		vector baseVelocity = player.GetVelocity()
 		baseVelocity.z = 0
-		newBattery.SetVelocity( baseVelocity + AnglesToForward( <0, RandomInt( 360.0 ), 0 > ) * 100 + <0,0,1> )
+		newBattery.SetVelocity( baseVelocity + direction * 100 + <0, 0, 1> )
 		Rodeo_TakeBatteryAwayFromPilot( player )
 	}
 
@@ -1801,10 +1790,6 @@ void function Rodeo_ApplyBatteryToTitan( entity battery, entity titan )
 
 		bool batteryIsAmped = IsAmpedBattery( battery )
 		float frac = batteryIsAmped ? ampedHealthSegmentFrac : healthSegmentFrac
-
-		// modified settings!
-		frac = batteryIsAmped ? frac * file.ampedBatteryRegenScale : frac * file.batteryRegenScale
-		//
 
 		int addHealth = int( healingAmount * frac )
 
@@ -2216,7 +2201,6 @@ void function ThrowRiderOff( entity rider, entity titan, vector direction, bool 
 		thread AnglesDebug( rider )
 	}
 
-	//print( "Throwing Rider Off! force: " + string( Length( direction ) ) )
 	rider.p.rodeoShouldAdjustJumpOffVelocity = false
 
 	rider.Signal( "RodeoOver" )
@@ -2295,7 +2279,7 @@ void function PostRodeoAirControl( entity player )
 	{
 		float elapsedTime = Time() - startTime
 		player.kv.airSpeed = player.GetPlayerSettingsField( "airSpeed" ) * POST_RODEO_AIR_CONTROL_SCALE * (1 - (elapsedTime / POST_RODEO_AIR_CONTROL_DURATION))
-		player.kv.airAcceleration = player.GetPlayerSettingsField( "airAcceleration" ) * POST_RODEO_AIR_CONTROL_SCALE * (1 - (elapsedTime / POST_RODEO_AIR_CONTROL_DURATION))
+		player.kv.airAcceleration = GetCurrentPlaylistVarInt( "custom_air_accel_pilot", int( player.GetPlayerSettingsField( "airAcceleration" ) ) ) * POST_RODEO_AIR_CONTROL_SCALE * (1 - (elapsedTime / POST_RODEO_AIR_CONTROL_DURATION))
 		//printt( "scale", POST_RODEO_AIR_CONTROL_SCALE * (1 - (elapsedTime / POST_RODEO_AIR_CONTROL_DURATION)) )
 
 		WaitFrame()
@@ -2352,7 +2336,7 @@ void function RestorePlayerAirControl( entity player ) //This function should re
 {
 	Assert( player.IsPlayer() )
 	player.kv.airSpeed = player.GetPlayerSettingsField( "airSpeed" )
-	player.kv.airAcceleration = player.GetPlayerSettingsField( "airAcceleration" )
+	player.kv.airAcceleration = GetCurrentPlaylistVarInt( "custom_air_accel_pilot", int( player.GetPlayerSettingsField( "airAcceleration" ) ) )
 }
 
 bool function ShouldThrowGrenadeInHatch( entity rodeoPilot )
@@ -2496,32 +2480,5 @@ bool function ClientCommand_TryNukeGrenade( entity player, array<string> args )
 		player.Signal( "TryNukeGrenade" )
 
 	return true
-}
-#endif
-
-// modified functions
-#if SERVER
-void function Rodeo_SetTitanRodeoSequenceEnabled( entity titan, bool enabled )
-{
-	entity titanSoul = titan.GetTitanSoul()
-	if ( !IsValid( titanSoul ) )
-		return
-
-	if ( !( titanSoul in file.titanSoulRodeoSequenceEnabled ) )
-		file.titanSoulRodeoSequenceEnabled[titanSoul] <- false
-
-	file.titanSoulRodeoSequenceEnabled[titanSoul] = enabled
-}
-
-bool function Rodeo_IsTitanRodeoSequenceEnabled( entity titan )
-{
-	entity titanSoul = titan.GetTitanSoul()
-	if ( !IsValid( titanSoul ) )
-		return true // default is enabled
-
-	if ( !( titanSoul in file.titanSoulRodeoSequenceEnabled ) )
-		return true
-
-	return file.titanSoulRodeoSequenceEnabled[titanSoul]
 }
 #endif
