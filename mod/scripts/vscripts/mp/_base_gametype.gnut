@@ -21,14 +21,6 @@ struct
 	array<entity> hurtTriggers = []
 	bool functionref( entity, entity, var ) isProtectedFromFriendlyFire
 	table< entity, OutOfBoundsDataStruct > outOfBoundsTable
-
-	// modified! make friendly fire less hardcoded
-	table<entity, bool> entitiesDoFFDamage // can handle players, npcs, weapons and projectiles
-	table<entity, bool> entitiesTakeFFDamage // mostly handle players
-	array<int> allowFFDamageSourceIds
-
-	// modified! make damage feedback less hardcoded
-	array< void functionref( entity, var, table ) > playerDamageFeedbackCallbacks
 } file
 
 function BaseGametype_Init()
@@ -571,55 +563,19 @@ function PlayerDamageFeedback( entity ent, damageInfo )
 	entity attacker = DamageInfo_GetAttacker( damageInfo )
 	Assert( attacker.IsPlayer() )
 
-	// modified to handle damage modifiers
-	table damageFeedbackTable =
-	{
-		customDamageType = DamageInfo_GetCustomDamageType( damageInfo ) // default value
-		damageToDisplay = DamageInfo_GetDamage( damageInfo ) // default value
-	}
-	//int customDamageType = DamageInfo_GetCustomDamageType( damageInfo )
+	int customDamageType = DamageInfo_GetCustomDamageType( damageInfo )
 
 	if ( IsMaxRangeShot( damageInfo ) )
-	{
-		//customDamageType = customDamageType | DF_MAX_RANGE
-		damageFeedbackTable.customDamageType = damageFeedbackTable.customDamageType | DF_MAX_RANGE
-	}
-
-	//float damageToDisplay = DamageInfo_GetDamage( damageInfo )
-
-	// modified: run callbacks, to make damage display less hardcoded
-	// added via AddCallback_PlayerDamageFeedback()
-	foreach ( void functionref( entity, var, table ) callbackFunc in file.playerDamageFeedbackCallbacks )
-		callbackFunc( ent, damageInfo, damageFeedbackTable )
-	//
+		customDamageType = customDamageType | DF_MAX_RANGE
 
 	if ( ent.GetHealth() - DamageInfo_GetDamage( damageInfo ) <= 0 )
 	{
 		if ( !ent.IsNPC() || ent.ai.killShotSound )
-		{
-			// modified debug
-			//print( "adding DF_KILLSHOT! from PlayerDamageFeedback()" )
-			//customDamageType = customDamageType | DF_KILLSHOT
-			damageFeedbackTable.customDamageType = damageFeedbackTable.customDamageType | DF_KILLSHOT
-		}
+			customDamageType = customDamageType | DF_KILLSHOT
 	}
 
-	// get modified damage
-	int customDamageType = expect int( damageFeedbackTable.customDamageType )
-	float damageToDisplay = expect float( damageFeedbackTable.damageToDisplay )
-
-	// modified to handle damage modifiers
-	//attacker.NotifyDidDamage( ent, DamageInfo_GetHitBox( damageInfo ), DamageInfo_GetDamagePosition( damageInfo ), customDamageType, DamageInfo_GetDamage( damageInfo ), DamageInfo_GetDamageFlags( damageInfo ), DamageInfo_GetHitGroup( damageInfo ), DamageInfo_GetWeapon( damageInfo ), DamageInfo_GetDistFromAttackOrigin( damageInfo ) )
-	attacker.NotifyDidDamage( ent, DamageInfo_GetHitBox( damageInfo ), DamageInfo_GetDamagePosition( damageInfo ), customDamageType, damageToDisplay, DamageInfo_GetDamageFlags( damageInfo ), DamageInfo_GetHitGroup( damageInfo ), DamageInfo_GetWeapon( damageInfo ), DamageInfo_GetDistFromAttackOrigin( damageInfo ) )
+	attacker.NotifyDidDamage( ent, DamageInfo_GetHitBox( damageInfo ), DamageInfo_GetDamagePosition( damageInfo ), customDamageType, DamageInfo_GetDamage( damageInfo ), DamageInfo_GetDamageFlags( damageInfo ), DamageInfo_GetHitGroup( damageInfo ), DamageInfo_GetWeapon( damageInfo ), DamageInfo_GetDistFromAttackOrigin( damageInfo ) )
 }
-
-// modified function for handling various damage callbacks
-void function AddCallback_PlayerDamageFeedback( void functionref( entity, var, table ) callbackFunc )
-{
-	if ( !file.playerDamageFeedbackCallbacks.contains( callbackFunc ) )
-		file.playerDamageFeedbackCallbacks.append( callbackFunc )
-}
-//
 
 void function UpdateLastDamageTime( entity ent )
 {
@@ -755,7 +711,6 @@ bool function PlayerOrNPCKilled( entity ent, var damageInfo )
 
 	int damageSourceID = DamageInfo_GetDamageSourceIdentifier( damageInfo )
 
-	// below two are hardcoded stuff, should be in a callback AddCallback_ShouldSendKillCallback( bool funtionref( ent, damageInfo ) )
 	if ( damageSourceID == eDamageSourceId.round_end )
 		return false
 
@@ -1542,26 +1497,12 @@ void function CodeCallback_WeaponFireInCloak( entity player )
 		if( IsValid( cloakWeapon ) )
 		{
 			array<string> mods = cloakWeapon.GetMods()
+			// can't reset cooldown properly in script, let's give player a empty one
 			player.TakeWeapon( "mp_ability_cloak" ) // not using TakeWeaponNow() to fit vanilla behavior
 			player.GiveOffhandWeapon( "mp_ability_cloak", offhandSlot, mods )
 			cloakWeapon = player.GetOffhandWeapon( offhandSlot )
 			cloakWeapon.SetWeaponPrimaryClipCountAbsolute( 0 )
 		}
-
-		//printt( "weapon", weapon.GetWeaponClassName() )
-		// JFS; need code feature to properly reset next attack time/cooldown stuff
-		/*
-		entity weapon = player.GetOffhandWeapon( OFFHAND_LEFT )
-		//printt( "weapon", weapon.GetWeaponClassName() )
-		// JFS; need code feature to properly reset next attack time/cooldown stuff
-		if ( IsValid( weapon ) && weapon.GetWeaponClassName() == "mp_ability_cloak" )
-		{
-			player.TakeOffhandWeapon( OFFHAND_LEFT )
-			player.GiveOffhandWeapon( "mp_ability_cloak", OFFHAND_LEFT )
-			weapon = player.GetOffhandWeapon( OFFHAND_LEFT )
-			weapon.SetWeaponPrimaryClipCountAbsolute( 0 )
-		}
-		*/
 	}
 	else
 	{
