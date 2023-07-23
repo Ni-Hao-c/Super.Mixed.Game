@@ -437,7 +437,7 @@ void function ApplyWeaponAmpForDuration_Threaded( entity weapon, float duration 
 		}
 	)
 
-	// modified: always append the first burnmod for weapon by default, in case we add modded burnmods
+	// append the first burnmod for weapon by default
 	array<string> burnMods = GetWeaponBurnMods( weapon.GetWeaponClassName() )
 	string mainBurnMod = "" 
 	if ( burnMods.len() > 0 )
