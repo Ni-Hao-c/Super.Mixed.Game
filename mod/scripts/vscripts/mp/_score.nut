@@ -12,19 +12,10 @@ global function ScoreEvent_SetEarnMeterValues
 global function ScoreEvent_SetupEarnMeterValuesForMixedModes
 global function ScoreEvent_SetupEarnMeterValuesForTitanModes
 
-// callback for doomed health loss titans
-global function AddCallback_TitanDoomedScoreEvent
-// new settings override func
-global function ScoreEvent_SetScoreEventNameOverride
-
 // nessie fix
 global function ScoreEvent_GetPlayerMVP
 global function ScoreEvent_SetMVPCompareFunc
 global function AddTitanKilledDialogueEvent
-
-// nessie modify
-global function ScoreEvent_DisableCallSignEvent
-global function ScoreEvent_EnableComebackEvent // doesn't exsit in vanilla, make it a setting
 
 struct 
 {
@@ -34,16 +25,9 @@ struct
 	table<entity, bool> soulHasDoomedOnce // for handling UndoomTitan() conditions, one soul can only be earn score once
 	array<void functionref( entity, var, bool )> titanDoomedScoreEventCallbacks
 
-	// new settings override func
-	table<string, string> scoreEventNameOverride
-
 	// nessie fix
 	table<string, string> killedTitanDialogues
 	IntFromEntityCompare mvpCompareFunc = null
-
-	// nessie modify
-	bool disableCallSignEvent = false
-	bool comebackEvent = false
 } file
 
 void function Score_Init()
@@ -84,14 +68,6 @@ void function InitPlayerForScoreEvents( entity player )
 //void function AddPlayerScore( entity targetPlayer, string scoreEventName, entity associatedEnt = null, string noideawhatthisis = "", int pointValueOverride = -1 )
 void function AddPlayerScore( entity targetPlayer, string scoreEventName, entity associatedEnt = null, var displayTypeOverride = null, int pointValueOverride = -1 )
 {
-	// modified: adding score event override
-	if ( scoreEventName in file.scoreEventNameOverride )
-		scoreEventName = file.scoreEventNameOverride[ scoreEventName ]
-	// anti-crash
-	if ( scoreEventName == "" )
-		return
-	//
-
 	ScoreEvent event = GetScoreEvent( scoreEventName )
 	
 	if ( !event.enabled || !IsValid( targetPlayer ) || !targetPlayer.IsPlayer() )
@@ -125,13 +101,6 @@ void function AddPlayerScore( entity targetPlayer, string scoreEventName, entity
 	{
 		earnValue *= pilotScaleVar
 		ownValue *= pilotScaleVar
-	}
-
-	// nessie modify
-	if ( file.disableCallSignEvent )
-	{
-		if ( event.displayType & eEventDisplayType.CALLINGCARD )
-			event.displayType = event.displayType & ~eEventDisplayType.CALLINGCARD
 	}
 	
 	if ( displayTypeOverride != null ) // has overrides?
@@ -250,12 +219,6 @@ void function ScoreEvent_PlayerKilled( entity victim, entity attacker, var damag
 		attacker.p.seekingRevenge = false
 	}
 
-	// comeback, doesn't exist in vanilla so make it a setting
-	if ( file.comebackEvent )
-	{
-		if ( attacker.p.numberOfDeathsSinceLastKill >= COMEBACK_DEATHS_REQUIREMENT )
-			AddPlayerScore( attacker, "Comeback", victim )
-	}
 	attacker.p.numberOfDeathsSinceLastKill = 0 // since they got a kill, remove the comeback trigger
 	
 	// untimed killstreaks
@@ -536,21 +499,6 @@ void function KilledPlayerTitanDialogue( entity attacker, entity victim )
 	PlayFactionDialogueToPlayer( dialogue, attacker )
 }
 
-// callback for doomed health loss titans
-void function AddCallback_TitanDoomedScoreEvent( void functionref( entity, var, bool ) callbackFunc )
-{
-	if ( !file.titanDoomedScoreEventCallbacks.contains( callbackFunc ) )
-		file.titanDoomedScoreEventCallbacks.append( callbackFunc )
-}
-
-// new settings override func
-void function ScoreEvent_SetScoreEventNameOverride( string eventName, string overrideName )
-{
-	if ( !( eventName in file.scoreEventNameOverride ) )
-		file.scoreEventNameOverride[ eventName ] <- ""
-	file.scoreEventNameOverride[ eventName ] = overrideName
-}
-
 // nessie fix
 entity function ScoreEvent_GetPlayerMVP( int team = 0 )
 {
@@ -577,15 +525,4 @@ void function ScoreEvent_SetMVPCompareFunc( IntFromEntityCompare func )
 void function AddTitanKilledDialogueEvent( string titanName, string dialogueName )
 {
 	file.killedTitanDialogues[titanName] <- dialogueName
-}
-
-// nessie modify
-void function ScoreEvent_DisableCallSignEvent( bool disable )
-{
-	file.disableCallSignEvent = disable
-}
-
-void function ScoreEvent_EnableComebackEvent( bool enable )
-{
-	file.comebackEvent = enable
 }
