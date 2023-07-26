@@ -539,7 +539,8 @@ void function PostDeathThread_MP( entity player, var damageInfo ) // based on ga
 			respawnTime = Time() - expect float ( attacker.s.respawnTime )
 		*/
 
-		thread PlayerWatchesKillReplayWrapper( player, inflictorEHandle, attackerIndex, respawnTime, timeOfDeath, beforeTime, replayTracker )
+		//thread PlayerWatchesKillReplayWrapper( player, inflictorEHandle, attackerIndex, respawnTime, timeOfDeath, beforeTime, replayTracker )
+		thread PlayerWatchesKillReplayWrapper( player, inflictorEHandle, attackerIndex, timeSinceAttackerSpawned, timeOfDeath, beforeTime, replayTracker )
 	}
 
 	PlayerClassChangeToSpectator( player )
