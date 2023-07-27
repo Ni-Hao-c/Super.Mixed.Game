@@ -62,7 +62,7 @@ function MpTitanweaponTripleThreat_Init()
 #if SERVER
 void function InitTripleThreatDamageCallback()
 {
-	AddDamageCallbackSourceID( eDamageSourceId.mp_titanweapon_triplethreat, TripleThreatGrenade_DamagedPlayerOrNPC )
+	//AddDamageCallbackSourceID( eDamageSourceId.mp_titanweapon_triplethreat, TripleThreatGrenade_DamagedPlayerOrNPC )
 }
 #endif
 //
