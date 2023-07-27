@@ -19,6 +19,7 @@ global function TemporarilyNonSolidPlayer
 
 	// modified!!
 	global function TitanEject_SetSoulUseNPCPilotAsNukeAttacker
+	global function TitanEject_SetSoulNukeExplosionDamageOverride
 #endif
 
 global const TITAN_EJECT_SCREECH	= "titan_eject_screech"
@@ -38,14 +39,28 @@ global enum eCockpitState
 	Eject = 9
 }
 
+// modified settings override!!!
+struct TitanNukeDamage
+{
+	int count
+	float duration
+	int damage
+	int damageHeavyArmor
+	int innerRadius
+	int outerRadius
+	int explosionFlags
+	int explosionForce
+	int damageFlags
+}
+
 struct
 {
 	float titanVOEjectNotifyDist = 2000 * 2000
 
-	// modified!!!!
+	// modified settings override!!!!
 	table<entity, bool> soulUseNPCPilotAsNukeAttacker
+	table<entity, TitanNukeDamage> soulNukeDamageOverrides
 } file
-
 
 function TitanShared_Init()
 {
@@ -360,13 +375,21 @@ function TitanEjectPlayer( entity ejectTitan, bool instant = false ) //TODO: Thi
 
 	e.player <- null
 	e.npcPilot <- null
-	bool ejectTitanHasNpcPilot = false
+	// modified, make it be in table
+	//bool ejectTitanHasNpcPilot = false
+	e.ejectTitanHasNpcPilot <- false
 	if ( ejectTitan.IsPlayer() )
 		e.player = ejectTitan
 
 	#if NPC_TITAN_PILOT_PROTOTYPE
 		if ( TitanHasNpcPilot( ejectTitan ) )
-			ejectTitanHasNpcPilot = true
+		{
+			// modified, make it be in table
+			//ejectTitanHasNpcPilot = true
+			e.ejectTitanHasNpcPilot = true
+			// vanilla missing. this can fix titan firing weapon during animation
+			ejectTitan.kv.allowShoot = 0
+		}
 	#endif
 
 	e.nukeFX <- []
@@ -436,6 +459,19 @@ function TitanEjectPlayer( entity ejectTitan, bool instant = false ) //TODO: Thi
 					if ( !e.hasNuclearCore ) // don't have a nuclear core at start
 						TakePassive( ejectTitan, ePassives.PAS_BUILD_UP_NUCLEAR_CORE ) // take the passive off player
 				}
+				// vanilla missing npc pilot logic
+				#if NPC_TITAN_PILOT_PROTOTYPE
+					if ( expect bool( e.ejectTitanHasNpcPilot ) )
+					{
+						// vanilla missing: npc pilot ejecting protection
+						entity npcPilot = expect entity( e.npcPilot )
+						if ( IsAlive( npcPilot ) )
+							thread ClearEjectInvulnerability( npcPilot )
+						// vanilla missing: give back weapon usage after ejecting
+						if ( IsAlive( ejectTitan ) )
+							ejectTitan.kv.allowShoot = 1
+					}
+				#endif
 			}
 			else if ( IsValid( ejectTitan ) )
 			{
@@ -646,8 +682,16 @@ function TitanEjectPlayer( entity ejectTitan, bool instant = false ) //TODO: Thi
 	}
 
 	#if NPC_TITAN_PILOT_PROTOTYPE
-		if ( ejectTitanHasNpcPilot )
+		// modified, make it be in table
+		//if ( ejectTitanHasNpcPilot )
+		if ( expect bool( e.ejectTitanHasNpcPilot ) )
+		{
 			e.npcPilot = NpcTitanBecomesPilot( ejectTitan )
+			// vanilla missing: npc pilot ejecting protection
+			entity npcPilot = expect entity( e.npcPilot )
+			if ( IsAlive( npcPilot ) )
+				npcPilot.SetInvulnerable()
+		}
 	#endif
 
 	vector titanOrigin = titan.GetOrigin()
@@ -746,23 +790,28 @@ function TitanEjectPlayer( entity ejectTitan, bool instant = false ) //TODO: Thi
 		if ( IsAlive( rider ) && e.player.GetTeam() != rider.GetTeam() )
 			thread LookAtEachOther( rider, expect entity( e.player ) )
 	}
-	else if ( ejectTitanHasNpcPilot && IsAlive( expect entity( e.npcPilot ) ) )
-	{
-		//speed *= 0.6 //magic number, too slow so removed it
-		vector velocity = < 0, 0, speed > //straight up
-		e.npcPilot.SetOrigin( titan.GetOrigin() + Vector(0,0,300) )
-		e.npcPilot.SetAngles( titan.GetAngles() )
-		// don't really have such animation
-		//e.npcPilot.Anim_ScriptedPlay( "running_jump_F_float" )
-		e.npcPilot.SetVelocity( velocity )
-
-		// modified here: use npc pilot as nuke attacker
-		if ( soul in file.soulUseNPCPilotAsNukeAttacker )
+	// modified version of npc pilot ejecting
+	#if NPC_TITAN_PILOT_PROTOTYPE
+		// modified, make it be in table
+		//else if ( ejectTitanHasNpcPilot && IsAlive( expect entity( e.npcPilot ) ) )
+		else if ( expect bool( e.ejectTitanHasNpcPilot ) && IsAlive( expect entity( e.npcPilot ) ) )
 		{
-			if ( file.soulUseNPCPilotAsNukeAttacker[ soul ] )
-				e.overrideAttacker = e.npcPilot
+			//speed *= 0.6 //vanilla magic number, too slow so modified to removed it
+			vector velocity = < 0, 0, speed > //straight up
+			e.npcPilot.SetOrigin( titan.GetOrigin() + Vector(0,0,300) )
+			e.npcPilot.SetAngles( titan.GetAngles() )
+			// don't really have such animation
+			//e.npcPilot.Anim_ScriptedPlay( "running_jump_F_float" )
+			e.npcPilot.SetVelocity( velocity )
+
+			// modified here: use npc pilot as nuke attacker
+			if ( soul in file.soulUseNPCPilotAsNukeAttacker )
+			{
+				if ( file.soulUseNPCPilotAsNukeAttacker[ soul ] )
+					e.overrideAttacker = e.npcPilot
+			}
 		}
-	}
+	#endif
 
 	if ( IsValid( e.player ) )
 		TitanEjectVO( expect entity( e.player ), titanOrigin )
@@ -1048,6 +1097,20 @@ function NuclearCoreExplosionChainReaction( vector origin, e )
 		}
 	)
 
+	// modified settings override
+	entity titan = expect entity( e.titan )
+	entity soul
+	if ( IsValid( titan ) && titan.IsTitan() )
+		soul = titan.GetTitanSoul()
+	if ( IsValid( soul ) && SoulHasNukeDamageOverride( soul ) ) // nuke damage effect override
+	{
+		TitanNukeDamage nukeStruct = GetSoulNukeDamageOverride( soul )
+		explosions = nukeStruct.count
+		time = nukeStruct.duration
+		waitPerExplosion = time / explosions
+	}
+	//
+
 	for ( int i = 0; i < explosions; i++ )
 	{
 		local normalDamage 		= baseNormalDamage
@@ -1071,15 +1134,37 @@ function NuclearCoreExplosionChainReaction( vector origin, e )
 		if ( outerRadius < innerRadius )
 			outerRadius = innerRadius
 
-		RadiusDamage_DamageDef( damagedef_nuclear_core,
-			origin,								// origin
-			explosionOwner,						// owner
-			inflictor,							// inflictor
-			normalDamage,						// normal damage
-			heavyArmorDamage,					// heavy armor damage
-			innerRadius,						// inner radius
-			outerRadius,						// outer radius
-			0 )									// dist from attacker
+		// modified settings override
+		if ( IsValid( soul ) && SoulHasNukeDamageOverride( soul ) ) // nuke damage effect override
+		{
+			TitanNukeDamage nukeStruct = GetSoulNukeDamageOverride( soul )
+			RadiusDamage( 
+				origin,								// origin
+				explosionOwner,						// owner
+				inflictor,							// inflictor
+				nukeStruct.damage,					// normal damage
+				nukeStruct.damageHeavyArmor,		// heavy armor damage
+				nukeStruct.innerRadius,				// inner radius
+				nukeStruct.outerRadius,				// outer radius
+				nukeStruct.explosionFlags,			// flags
+				0,									// distanceFromAttacker
+				nukeStruct.explosionForce,			// explosionForce
+				nukeStruct.damageFlags,				// scriptDamageFlags
+				damagedef_nuclear_core				// scriptDamageSourceIdentifier
+			)
+		}
+		else // vanilla behavior
+		{
+			RadiusDamage_DamageDef( damagedef_nuclear_core,
+				origin,								// origin
+				explosionOwner,						// owner
+				inflictor,							// inflictor
+				normalDamage,						// normal damage
+				heavyArmorDamage,					// heavy armor damage
+				innerRadius,						// inner radius
+				outerRadius,						// outer radius
+				0 )									// dist from attacker
+		}
 
 		wait waitPerExplosion
 	}
@@ -1334,5 +1419,38 @@ void function TitanEject_SetSoulUseNPCPilotAsNukeAttacker( entity soul, bool set
 	if ( !( soul in file.soulUseNPCPilotAsNukeAttacker ) )
 		file.soulUseNPCPilotAsNukeAttacker[ soul ] <- false // default value
 	file.soulUseNPCPilotAsNukeAttacker[ soul ] = setAs
+}
+
+void function TitanEject_SetSoulNukeExplosionDamageOverride( entity soul, int count, float duration, int damage, int damageHeavyArmor, int innerRadius, int outerRadius, int explosionFlags, int explosionForce, int damageFlags )
+{
+	TitanNukeDamage nukeStruct
+	if ( !( soul in file.soulNukeDamageOverrides ) )
+		file.soulNukeDamageOverrides[ soul ] <- nukeStruct // default
+	
+	nukeStruct.count = count
+	nukeStruct.duration = duration
+	nukeStruct.damage = damage
+	nukeStruct.damageHeavyArmor = damageHeavyArmor
+	nukeStruct.innerRadius = innerRadius
+	nukeStruct.outerRadius = outerRadius
+	nukeStruct.explosionFlags = explosionFlags
+	nukeStruct.explosionForce = explosionForce
+	nukeStruct.damageFlags = damageFlags
+	file.soulNukeDamageOverrides[ soul ] = nukeStruct
+}
+
+bool function SoulHasNukeDamageOverride( entity soul )
+{
+	if ( !( soul in file.soulNukeDamageOverrides ) )
+		return false // default is no overrides
+	return true
+}
+
+TitanNukeDamage function GetSoulNukeDamageOverride( entity soul )
+{
+	TitanNukeDamage defaultStruct
+	if ( !( soul in file.soulNukeDamageOverrides ) )
+		return defaultStruct
+	return file.soulNukeDamageOverrides[ soul ]
 }
 #endif
