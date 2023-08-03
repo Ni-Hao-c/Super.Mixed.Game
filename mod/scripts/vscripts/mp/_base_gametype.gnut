@@ -908,7 +908,9 @@ bool function ShouldSetObserverTarget( entity attacker )
 
 float function CalculateLengthOfKillReplay( entity player, int methodOfDeath ) //Meant to be called on the same frame player dies
 {
-	return GetDeathCamLength( player ) + GetKillReplayBeforeTime( player, methodOfDeath ) + GetKillReplayAfterTime( player )
+	// we added modified death cam, should get player's actual death cam length by using GetDeathCamLength( player, true )
+	//return GetDeathCamLength( player ) + GetKillReplayBeforeTime( player, methodOfDeath ) + GetKillReplayAfterTime( player )
+	return GetDeathCamLength( player, true ) + GetKillReplayBeforeTime( player, methodOfDeath ) + GetKillReplayAfterTime( player )
 }
 
 float function GetKillReplayBeforeTime( entity player, int methodOfDeath )

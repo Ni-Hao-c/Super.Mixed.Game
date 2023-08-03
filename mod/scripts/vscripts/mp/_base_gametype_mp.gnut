@@ -27,7 +27,7 @@ global function SetPlayerCameraToIntermissionCam // shared
 global function IsPlayerDeathsHidden // new added
 
 global function SetPlayerRespawnForced
-global function ForcedRespawn_AddDisabledDamageSourceID // add a damageSourceId that won't trigger forced respawn
+global function AddCallback_ShouldPlayerDoForcedRespawn // add a callback func to check whether we trigger forced respawn
 global function ForcedRespawn_SetDisabledForPlayer // disable forced respawn for certain player
 global function SetPlayerRespawnDelayForced // force a player to follow certain respawn delay. can be used for spawnwaves
 global function ResetPlayerRespawnDelay // reset respawn delay to default value: playlistvar "respawn_delay"
@@ -36,6 +36,10 @@ global function GetPlayerRespawnDelay
 global function SetLateJoinRespawnEnabled // respawn the player if they join mid-game in a elimination gamemode
 
 global function SetGamemodeAnnouncementEnabled
+
+global function SetDeathCamLengthForced
+global function GetForcedDeathCamLength // shared with _utility_shared.nut
+global function SetReplayStartDelayOverride // only gets applied when death cam modified!
 
 global function SetDeathHintsEnabled
 global function SetDeathHintsInterval // how many deaths needed for a death hint to show
@@ -55,13 +59,17 @@ struct
 	
 	// modified
 	bool forcedRespawn = true
-	array<int> disableForcedRespawnDamageSourceIDs
+	array<bool functionref( entity, table, bool )> shouldDoForcedRespawnCallbacks
 	table<entity, bool> playerDisableForcedRespawn
 	table<entity, float> playerRespawnDelay
 
 	bool enableLateRespawn = true
 	array<string> respawnedPlayerUIDs = []
 	bool enableGamemodeAnnouncement = true
+
+	// death cam modifier
+	float forcedDeathCamLength = -1
+	float replayStartDelayOverride = -1
 
 	bool deathHintsEnabled = true
 	table<entity, float> playerDeathHintAllowedTime
@@ -417,6 +425,9 @@ void function PostDeathThread_MP( entity player, var damageInfo ) // based on ga
 	player.SetNoTargetSmartAmmo( false )
 
 	player.ClearExtraWeaponMods()
+
+	// we're not delayed yet, get damage table from damageInfo, so we can use it in ShouldForceRespawnPlayer_FromDamageTable()
+	table damageTable = GetDamageTableFromInfo( damageInfo )
 	
 	// move to "OnPlayerKilled"
 	// disable prediction to prevent it messing with ragdoll in some places, as well as killreplay and such
@@ -521,6 +532,15 @@ void function PostDeathThread_MP( entity player, var damageInfo ) // based on ga
 	float deathcamLength = GetDeathCamLength( player )
 	wait deathcamLength
 
+	// modified over here, add support for modified death cam length
+	float actualDeathCamLength = GetDeathCamLength( player, true ) // this gets the death cam length that ignores custom settings
+	bool deathCamModified = actualDeathCamLength > deathcamLength
+	float replayStartDelay = actualDeathCamLength - deathcamLength // in case we're not in good death cam length
+	if ( deathCamModified && file.replayStartDelayOverride != -1 ) // replay start delay modified. only apply when deathCamModified!
+		replayStartDelay = file.replayStartDelayOverride
+	if ( replayStartDelay < 0 ) // defensive fix
+		replayStartDelay = 0
+
 	// hack: double check if killcams are enabled and valid here in case gamestate has changed this
 	//shouldDoReplay = shouldDoReplay && Replay_IsEnabled() && KillcamsEnabled() && IsValid( attacker )
 	// fix for replay
@@ -539,11 +559,18 @@ void function PostDeathThread_MP( entity player, var damageInfo ) // based on ga
 			respawnTime = Time() - expect float ( attacker.s.respawnTime )
 		*/
 
-		//thread PlayerWatchesKillReplayWrapper( player, inflictorEHandle, attackerIndex, respawnTime, timeOfDeath, beforeTime, replayTracker )
-		thread PlayerWatchesKillReplayWrapper( player, inflictorEHandle, attackerIndex, timeSinceAttackerSpawned, timeOfDeath, beforeTime, replayTracker )
+		// modified over here, add support for modified death cam length
+		//thread PlayerWatchesKillReplayWrapper( player, attacker, respawnTime, timeOfDeath, beforeTime, replayTracker )		
+		// try to do delayed replay
+		thread DelayedPlayerWatchesKillReplayWrapper( player, inflictorEHandle, attackerIndex, timeSinceAttackerSpawned, timeOfDeath, beforeTime, replayTracker, replayStartDelay )
 	}
 
-	PlayerClassChangeToSpectator( player )
+	// BecomeRagdoll() seems weird with short deathCam
+	// now setting these in DoRespawnPlayer() to prevent crash
+	//player.SetPlayerSettings( "spectator" ) // prevent a crash with going from titan => pilot on respawn
+	//player.StopPhysics() // need to set this after SetPlayerSettings
+	if ( !deathCamModified )
+		PlayerClassChangeToSpectator( player )
 
 	if ( RespawnsEnabled() )
 	{
@@ -560,7 +587,7 @@ void function PostDeathThread_MP( entity player, var damageInfo ) // based on ga
 		wait respawnDelay
 
 		// new intermission cam system
-		if( ShouldForceRespawnPlayer_FromDamageInfo( player, methodOfDeath ) )
+		if( ShouldForceRespawnPlayer_FromDamageTable( player, damageTable ) )
 		{
 			float waitBeforeRespawn = 0.0
 			//if( !shouldDoReplay || respawnDelay >= 3.0 ) // doing this so player can respawn as titan in some modes, but vanilla don't features this lol
@@ -571,9 +598,11 @@ void function PostDeathThread_MP( entity player, var damageInfo ) // based on ga
 					waitBeforeRespawn = 0
 				// modified over here, add support for modified death cam length
 				float interMissionCamDelay = waitBeforeRespawn + 0.1
+				if ( deathCamModified )
+					interMissionCamDelay += replayStartDelay
 				thread SetPlayerCameraToIntermissionCam( player, interMissionCamDelay )
 			}
-			thread ForcedRespawnThink( player, waitBeforeRespawn )
+			thread ForcedRespawnThink( player, waitBeforeRespawn, deathCamModified, replayStartDelay )// if not doing replay, set player's camera to intermissionCam
 		}
 
 		player.WaitSignal( "RespawnMe" ) // set in base_gametype: ClientCommand_RespawnPlayer
@@ -590,6 +619,8 @@ void function PostDeathThread_MP( entity player, var damageInfo ) // based on ga
 		SetPlayerEliminated( player ) // allows player to skip replay
 		if ( shouldDoReplay )
 			WaitSignal( player, "KillCamOver", "RespawnMe" )
+		else // no replay enabled, we wait an extra replayStartDelay for handling modified deathcam
+			wait replayStartDelay
 
 		thread PlayerBecomesSpectator( player )
 	}
@@ -615,6 +646,7 @@ void function SetPlayerCameraToIntermissionCam( entity player, float delay = 0 )
 
 	if ( file.intermissionCamera != null )
 	{
+		// player may not become spectator since death cam can be modified
 		if ( player.GetPlayerSettings() != "spectator" )
 			PlayerClassChangeToSpectator( player )
 
@@ -635,7 +667,7 @@ void function PlayerClassChangeToSpectator( entity player )
 	player.StopPhysics()
 }
 
-void function ForcedRespawnThink( entity player, float waitBeforeRespawn )
+void function ForcedRespawnThink( entity player, float waitBeforeRespawn, bool replayHasDelayed = false, float replayStartDelay = 0.0 )
 {
 	player.EndSignal( "OnDestroy" )
 	player.EndSignal( "RespawnMe" )
@@ -658,13 +690,35 @@ void function ForcedRespawnThink( entity player, float waitBeforeRespawn )
 	)
 	
 	WaitFrame() // wait a frame for player.WaitSignal( "RespawnMe" ) to set up, or maybe put the waitsignal inside this function? rename it to PlayerWaitForRespawn()
-	if ( player.IsWatchingKillReplay() )
+	// modified over here, add support for modified death cam length
+	if ( replayHasDelayed )
+	{
+		if ( replayStartDelay > 0 )
+			wait replayStartDelay // this is actually replayStartDelay
+	}
+	if( player.IsWatchingKillReplay() )
 		player.WaitSignal( "KillCamOver" )
 
 	if( waitBeforeRespawn > 0 )
 		wait waitBeforeRespawn
 
 	result.repsawnIsForced = true
+}
+
+void function DelayedPlayerWatchesKillReplayWrapper( entity player, int inflictorEHandle, int attackerIndex, float timeSinceAttackerSpawned, float timeOfDeath, float beforeTime, table replayTracker, float delay = 0.0 )
+{
+	// same end signals as PlayerWatchesKillReplayWrapper()
+	player.EndSignal( "RespawnMe" )
+	player.EndSignal( "OnRespawned" )
+	
+	player.EndSignal( "OnDestroy" )
+	svGlobal.levelEnt.EndSignal( "GameStateChanged" )
+
+	//print( "replay start delay is: " + string( delay ) )
+	if ( delay > 0 )
+		wait delay
+
+	thread PlayerWatchesKillReplayWrapper( player, inflictorEHandle, attackerIndex, timeSinceAttackerSpawned, timeOfDeath, beforeTime, replayTracker )
 }
 //
 
@@ -694,6 +748,7 @@ void function PlayerWatchesKillReplayWrapper( entity player, int inflictorEHandl
 		}
 	)
 
+	// have to be spectator before watching kill replay
 	if ( player.GetPlayerSettings() != "spectator" )
 		PlayerClassChangeToSpectator( player )
 
@@ -928,10 +983,10 @@ void function SetPlayerRespawnForced( bool forced )
 	file.forcedRespawn = forced
 }
 
-void function ForcedRespawn_AddDisabledDamageSourceID( int damageSourceId )
+void function AddCallback_ShouldPlayerDoForcedRespawn( bool functionref( entity, table, bool ) callbackFunc )
 {
-	if ( !file.disableForcedRespawnDamageSourceIDs.contains( damageSourceId ) )
-		file.disableForcedRespawnDamageSourceIDs.append( damageSourceId )
+	if ( !file.shouldDoForcedRespawnCallbacks.contains( callbackFunc ) )
+		file.shouldDoForcedRespawnCallbacks.append( callbackFunc )
 }
 
 void function ForcedRespawn_SetDisabledForPlayer( entity player, bool disable )
@@ -948,13 +1003,16 @@ bool function ShouldForceRespawnPlayer()
 	return file.forcedRespawn
 }
 
-bool function ShouldForceRespawnPlayer_FromDamageInfo( entity victim, int methodOfDeath )
+bool function ShouldForceRespawnPlayer_FromDamageTable( entity victim, table damageTable )
 {
 	if ( !ShouldForceRespawnPlayer() ) // main check
 		return false
 
 	// extra checks
-	if ( file.disableForcedRespawnDamageSourceIDs.contains( methodOfDeath ) )
+	bool shouldForceRespawn = true
+	foreach ( bool functionref( entity, table, bool ) callbackFunc in file.shouldDoForcedRespawnCallbacks )
+		shouldForceRespawn = callbackFunc( victim, damageTable, shouldForceRespawn )
+	if ( !shouldForceRespawn )
 		return false
 
 	if ( victim in file.playerDisableForcedRespawn )
@@ -1001,6 +1059,21 @@ bool function IsLateJoinRespawnEnabled()
 void function SetGamemodeAnnouncementEnabled( bool enabled )
 {
 	file.enableGamemodeAnnouncement = enabled
+}
+
+void function SetDeathCamLengthForced( float camLength )
+{
+	file.forcedDeathCamLength = camLength
+}
+
+float function GetForcedDeathCamLength()
+{
+	return file.forcedDeathCamLength
+}
+
+void function SetReplayStartDelayOverride( float delay )
+{
+	file.replayStartDelayOverride = delay
 }
 
 void function SetDeathHintsEnabled( bool enabled )
