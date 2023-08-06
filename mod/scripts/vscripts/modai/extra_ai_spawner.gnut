@@ -2391,6 +2391,7 @@ void function SetUpSpecialistGrunt( entity npc, string aiSet )
 			table< string, array<string> > guardValidWeaponMods
 			guardValidWeaponMods["mp_weapon_smart_pistol"] <- []
 			guardValidWeaponMods["mp_weapon_alternator_smg"] <- []
+			// mp_weapon_shotgun_doublebarrel_tfo does not exist in v1.13.5
 			//guardValidWeaponMods["mp_weapon_shotgun_doublebarrel_tfo"] <- ["projectile_shotgun_npc"] // modified shotgun variant that only suitable for npcs
 
 			// special weapons, hardcoded!
