@@ -21,6 +21,11 @@ WeaponData
 
 	Mods
 	{
+		// northstar weapon mods. in this branch we put them as ns v1.13.5 does
+		one_in_the_chamber
+		{
+		}
+
 		iron_sights
 		{
 		}
@@ -92,11 +97,6 @@ WeaponData
 		{
 		}
 		burn_mod_wingman
-		{
-		}
-
-		// northstar weapon mods
-		one_in_the_chamber
 		{
 		}
 

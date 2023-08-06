@@ -28,6 +28,15 @@ WeaponData
 
 	Mods
 	{
+		// northstar weapon mods. in this branch we put them as ns v1.13.5 does
+		sns // this can be used to have good client sync! it's damage and clipsize setting has been moved below
+		{
+			"explosion_damage" "*1"
+			"damage_near_value" "*1"
+			"ammo_clip_size" 	"*1"
+			"projectile_launch_speed" "++5000"
+		}
+
 		ar_trajectory
 		{
 		}
@@ -65,15 +74,6 @@ WeaponData
 		}
 		pas_run_and_gun
 		{
-		}
-
-		// northstar weapon mods
-		sns // this can be used to have good client sync! it's damage and clipsize setting has been moved below
-		{
-			"explosion_damage" "*1"
-			"damage_near_value" "*1"
-			"ammo_clip_size" 	"*1"
-			"projectile_launch_speed" "++5000"
 		}
 
 		// softball settings
