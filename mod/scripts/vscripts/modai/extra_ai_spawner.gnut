@@ -1193,7 +1193,7 @@ bool function CC_SpawnTestPistolGrunt( entity player, array<string> args )
 	//SetSpawnOption_Weapon( grunt, "mp_weapon_semipistol" )
 	//SetSpawnOption_Weapon( grunt, "mp_weapon_alternator_smg" )
 	//SetSpawnOption_Weapon( grunt, "mp_weapon_wingman_n" )
-	SetSpawnOption_Weapon( grunt, "mp_weapon_shotgun_pistol" )
+	//SetSpawnOption_Weapon( grunt, "mp_weapon_shotgun_pistol" )
 	//SetSpawnOption_Weapon( grunt, "mp_weapon_shotgun_doublebarrel_tfo" )
 
 	file.npcSpawnFromExtraSpawner[ grunt ] <- true
