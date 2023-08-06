@@ -49,22 +49,14 @@ function MpTitanweaponTripleThreat_Init()
 	PrecacheParticleSystem( FX_TRIPLE_IGNITION )
 	PrecacheParticleSystem( FX_TRIPLE_IGNITION_BURN )
 
-	// northstarCN specific. northstar didn't support this damageSourceId
+	// modified content
 #if SERVER
-	// needs to wait for eDamageSourceId.mp_titanweapon_triplethreat being registered
-	AddCallback_EntitiesDidLoad( InitTripleThreatDamageCallback )
+	// in this branch we're still in v1.13.5, register damage source manually
+	RegisterWeaponDamageSource( "mp_titanweapon_triplethreat", "#WPN_TITAN_TRIPLE_THREAT" )
+	AddDamageCallbackSourceID( eDamageSourceId.mp_titanweapon_triplethreat, TripleThreatGrenade_DamagedPlayerOrNPC )
 #endif
 	//
 }
-
-// northstarCN specific. northstar didn't support this damageSourceId
-#if SERVER
-void function InitTripleThreatDamageCallback()
-{
-	AddDamageCallbackSourceID( eDamageSourceId.mp_titanweapon_triplethreat, TripleThreatGrenade_DamagedPlayerOrNPC )
-}
-#endif
-//
 
 var function OnWeaponPrimaryAttack_titanweapon_triplethreat( entity weapon, WeaponPrimaryAttackParams attackParams )
 {
@@ -93,20 +85,19 @@ function FireTripleThreat( entity weapon, WeaponPrimaryAttackParams attackParams
 		shouldCreateProjectile = true
 
 	// fix fire sound for ttf2
-	/* // now using northstarCN changes
+	// in this branch we're still in v1.13.5, needs to use forced sound fix
 	#if SERVER
 		if( weaponOwner.IsPlayer() )
 		{
-			EmitSoundOnEntityOnlyToPlayer( weapon, weaponOwner, "Weapon_Softball_Fire_1P" ) //Weapon_MGL_Fire_1P
-			EmitSoundOnEntityExceptToPlayer( weapon, weaponOwner, "Weapon_Softball_Fire_3P" ) //Weapon_MGL_Fire_3P
+			EmitSoundOnEntityOnlyToPlayer( weapon, weaponOwner, "Weapon_MGL_Fire_1P" )
+			EmitSoundOnEntityExceptToPlayer( weapon, weaponOwner, "Weapon_MGL_Fire_3P" )
 		}
 		else
-			EmitSoundOnEntity( weaponOwner, "Weapon_Softball_Fire_3P" ) //Weapon_MGL_Fire_3P
+			EmitSoundOnEntity( weaponOwner, "Weapon_MGL_Fire_3P" )
 	#endif
-	*/
 	//
 	// fix sound for ttf2!!!
-	weapon.EmitWeaponSound_1p3p( "Weapon_MGL_Fire_1P", "Weapon_MGL_Fire_3P" )
+	//weapon.EmitWeaponSound_1p3p( "Weapon_MGL_Fire_1P", "Weapon_MGL_Fire_3P" )
 
 	#if CLIENT
 		if ( !playerFired )
