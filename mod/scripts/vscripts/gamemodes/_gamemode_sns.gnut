@@ -159,7 +159,6 @@ void function OnPlayerGetsNewPilotLoadout( entity player, PilotLoadoutDef p )
 	player.GiveWeapon( "mp_weapon_wingman_n", mods)
 	if (file.softball_enabled) {
 		mods.append("jump_kit") // the funny
-		mods.append( "sns_weapon_settings" ) // for nessie mixed sns softball
 		player.GiveWeapon( "mp_weapon_softball", mods)
 	}
 	player.GiveOffhandWeapon( "melee_pilot_emptyhanded", OFFHAND_MELEE )
