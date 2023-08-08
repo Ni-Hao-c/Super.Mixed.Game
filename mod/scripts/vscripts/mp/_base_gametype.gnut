@@ -472,9 +472,7 @@ function HandleLocationBasedDamage( entity ent, var damageInfo )
 {
 	// Don't allow non-players to get headshots or any other location bonuses
 	entity attacker = DamageInfo_GetAttacker( damageInfo )
-	// modified to add settings, allowing npc dealing location based damages
-	//if ( !IsValid( attacker ) || !attacker.IsPlayer() )
-	if ( !IsValid( attacker ) || ( !DamageUtility_IsNPCLocationBasedDamageEnabled() && !attacker.IsPlayer() ) )
+	if ( !IsValid( attacker ) || !attacker.IsPlayer() )
 		return
 
 	bool debugPrints = false
