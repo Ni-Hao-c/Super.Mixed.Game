@@ -34,11 +34,15 @@ global function ExtraSpawner_ApplyNPCGrenadeWeapon // grenade have to be given b
 global function ExtraSpawner_ApplyNPCExtraWeaponMods
 global function ExtraSpawner_SetUpNPCPilot
 
+// wrapped care package functions
 global function ExtraSpawner_SpawnCarePackageToGetWeapons
+global function ExtraSpawner_SpawnCarePackageToRefillAmmo
 // these settings should be done in prematch, don't do it right after levelLoad
 global function ExtraSpawner_SetCarePackageWeapons
 global function ExtraSpawner_SetCarePackageWeaponMods
 global function ExtraSpawner_SetCarePackageWeaponModsMultiple
+// raw care package function
+global function ExtraSpawner_SpawnCarePackage
 
 // tick reaper funcs
 global function ExtraSpawner_SpawnReaperCanLaunchTicks
@@ -151,7 +155,7 @@ struct
 	table< string, void functionref( entity ) > npcHandlerFuncs
 
 	// care package
-	array<entity> usedplayer = []
+	array<entity> carePackageUsedPlayers = []
 	array<string> carePackageWeapons
 	// now allowing every weapon to have a custom mod
 	table< string, array<string> > carePackageWeaponMods
@@ -209,7 +213,8 @@ void function ExtraAISpawner_Init()
 	//AddClientCommandCallback( "specialistgrunt", CC_SpawnSpecialistGrunt )
 	//AddClientCommandCallback( "pilot", CC_SpawnPilotElite )
 	//AddClientCommandCallback( "boss_intro", CC_SpawnBossTitanWithIntro )
-	//AddClientCommandCallback( "pistol_grunt", CC_SpawnTestPistolGrunt )
+	//AddClientCommandCallback( "pistolgrunt", CC_SpawnTestPistolGrunt )
+	//AddClientCommandCallback( "fakespectre", CC_SpawnFakeMLTSpectre )
 }
 
 void function OnClientConnected( entity player )
@@ -498,9 +503,9 @@ void function InitDefaultTitanList()
 		NPCBisonLoadout
 	)
 
-	/*
 	// modded weapon titans
 	// brute4
+	/*
 	ExtraSpawner_RegisterToTitanSpawnList
 	(
 		"brute4_modded",								// spawn name. unique
@@ -513,8 +518,9 @@ void function InitDefaultTitanList()
 		"#NPC_TITAN_AUTO_ATLAS_ROCKETEER",				// embarkedTitle
 		NPCBrute4Loadout
 	)
+	*/
 
-	// archon, WIP. sometimes crashes client when shock ball hits player, also mostly can't fire arc cannon
+	// archon
 	ExtraSpawner_RegisterToTitanSpawnList
 	(
 		"archon_modded",								// spawn name. unique
@@ -527,7 +533,6 @@ void function InitDefaultTitanList()
 		"#NPC_TITAN_AUTO_STRYDER_ARC",					// embarkedTitle
 		NPCArchonLoadout
 	)
-	*/
 }
 //
 
@@ -550,7 +555,8 @@ void function NPCBruteLoadout( entity titan )
 	titan.GiveOffhandWeapon( "melee_titan_punch_northstar", OFFHAND_MELEE )
 
 	//titan.SetBehaviorSelector( "behavior_titan_rocketeer" ) // default behavior, being set after embarking
-	titan.SetTitle( "#NPC_TITAN_AUTO_STRYDER_ROCKET" )
+	// title should be setup by npc pilot's spawn func
+	//titan.SetTitle( "#NPC_TITAN_AUTO_STRYDER_ROCKET" )
 
 	entity soul = titan.GetTitanSoul()
 	if ( IsValid( soul ) )
@@ -575,7 +581,8 @@ void function NPCBisonLoadout( entity titan )
 	//Melee
 	titan.GiveOffhandWeapon( "melee_titan_punch_scorch", OFFHAND_MELEE )
 
-	titan.SetTitle( "#NPC_TITAN_AUTO_OGRE_FIGHTER" )
+	// title should be setup by npc pilot's spawn func
+	//titan.SetTitle( "#NPC_TITAN_AUTO_OGRE_FIGHTER" )
 
 	// execution_scorch_prime don't require weapons, no need to fix
 
@@ -606,7 +613,8 @@ void function NPCBrute4Loadout( entity titan )
 	//Melee
 	titan.GiveOffhandWeapon( "melee_titan_punch_northstar", OFFHAND_MELEE )
 
-	titan.SetTitle( "#NPC_TITAN_AUTO_ATLAS_ROCKETEER" )
+	// title should be setup by npc pilot's spawn func
+	//titan.SetTitle( "#NPC_TITAN_AUTO_ATLAS_ROCKETEER" )
 
 	// execution_northstar_prime don't require weapons, no need to fix
 
@@ -628,7 +636,9 @@ void function NPCArchonLoadout( entity titan )
 {
 	TakeAllWeapons( titan )
 	//Weapon
-	titan.GiveWeapon ( "mp_titanweapon_sniper", ["archon_arc_cannon"])
+	// use npc specific version of arc cannon, try to prevent unable to fire sometimes
+	//titan.GiveWeapon ( "mp_titanweapon_sniper", ["archon_arc_cannon"])
+	titan.GiveWeapon ( "mp_titanweapon_arc_cannon", ["archon_arc_cannon_npc"] )
 	//Defence
 	titan.GiveOffhandWeapon( "mp_titanweapon_vortex_shield", OFFHAND_SPECIAL, ["slow_recovery_vortex", "archon_shock_shield"] )
 	//Tactical
@@ -636,11 +646,14 @@ void function NPCArchonLoadout( entity titan )
 	//Offence
 	titan.GiveOffhandWeapon( "mp_titanweapon_stun_laser", OFFHAND_ORDNANCE, ["archon_charge_ball"] )
 	//Titan Core
+	// normally, non-ogre npc titans can't use flame core variant cause they're missing anim events
+	// try to fix in their scripts
 	titan.GiveOffhandWeapon( "mp_titancore_flame_wave", OFFHAND_EQUIPMENT, ["archon_storm_core"] )
 	//Melee
 	titan.GiveOffhandWeapon( "melee_titan_punch_ion", OFFHAND_MELEE )
 
-	titan.SetTitle( "#NPC_TITAN_AUTO_STRYDER_ARC" )
+	// title should be setup by npc pilot's spawn func
+	//titan.SetTitle( "#NPC_TITAN_AUTO_STRYDER_ARC" )
 
 	entity soul = titan.GetTitanSoul()
 	if ( IsValid( soul ) )
@@ -686,10 +699,10 @@ void function InitDefaultBossTitanList()
 		"execution_vanguard_kit",						// executionRef, npc ion can't use prime executions, just let them use battery thief
 		"#BOSSNAME_SLONE",								// boss title
 		"斯隆",											// pilot title. can't use localized string
-		$"models/humans/pilots/pilot_heavy_roog_m.mdl",		// character model, use mp pilot model: holopilot female
+		$"models/humans/pilots/pilot_medium_reaper_f.mdl",		// character model, use mp pilot model: pulse blade female
 		BossLoadout_Generic_NoModelForMP, 				// generic loadout function for bosses that has no pilot model for mp
-		3,												// skin index, unsure
-		1												// decal index
+		7,												// skin index, unsure
+		11												// decal index
 	)
 
 	// kane
@@ -703,7 +716,7 @@ void function InitDefaultBossTitanList()
 		"execution_scorch_prime",						// executionRef
 		"#BOSSNAME_KANE",								// boss title
 		"肯恩",											// pilot title. can't use localized string
-		$"models/humans/pilots/pilot_heavy_roog_m.mdl",		// character model, use mp pilot model: a-wall male
+		$"models/humans/pilots/pilot_medium_stalker_m.mdl",		// character model, use mp pilot model: holopilot male
 		BossLoadout_Generic_NoModelForMP, 				// generic loadout function for bosses that has no pilot model for mp
 		3,												// skin index, unsure
 		1												// decal index
@@ -722,7 +735,7 @@ void function InitDefaultBossTitanList()
 		"毒蛇",											// pilot title. can't use localized string
 		$"models/humans/pilots/pilot_medium_reaper_m.mdl",		// character model, use mp pilot model: pulse blade male
 		BossLoadout_Generic_NoModelForMP, 				// generic loadout function for bosses that has no pilot model for mp
-		1,												// skin index, unsure
+		5,												// skin index, unsure
 		10												// decal index
 	)
 
@@ -756,7 +769,7 @@ void function InitDefaultBossTitanList()
 		"里赫特",										// pilot title. can't use localized string
 		$"models/humans/pilots/pilot_heavy_drex_m.mdl",		// character model, use mp pilot model: cloak male
 		BossLoadout_Generic_NoModelForMP, 				// generic loadout function for bosses that has no pilot model for mp
-		5,												// skin index, unsure
+		4,												// skin index, unsure
 		13												// decal index
 	)
 
@@ -870,6 +883,7 @@ void function BossLoadout_Jack( entity titan )
 	entity soul = titan.GetTitanSoul()
 	if ( IsValid( soul ) )
 	{
+		PlayerEarnMeter_SetSoulEarnMeterSmokeEnabled( soul, false )	// disable earnmeter smoke availability, they already have electric smoke
 		MeleeSyncedTitan_SetSoulCanBeExecuted( soul, false ) // cannot execute BT, they don't have enough animations
 		Rodeo_SetTitanRodeoSequenceEnabled( titan, false ) // bt don't have battery on hatch, don't allow removing
 	}
@@ -895,6 +909,7 @@ void function BossLoadout_Sarah( entity titan )
 	entity soul = titan.GetTitanSoul()
 	if ( IsValid( soul ) )
 	{
+		PlayerEarnMeter_SetSoulEarnMeterSmokeEnabled( soul, false )	// disable earnmeter smoke availability, they already have electric smoke
 		MeleeSyncedTitan_SetSoulCanBeExecuted( soul, false ) // cannot execute BT, they don't have enough animations
 		Rodeo_SetTitanRodeoSequenceEnabled( titan, false ) // bt don't have battery on hatch, don't allow removing
 	}
@@ -914,6 +929,11 @@ void function BossLoadout_SarahMonarch( entity titan )
 	titan.GiveOffhandWeapon( "mp_titanability_smoke", OFFHAND_ANTIRODEO )
 	titan.TakeOffhandWeapon( OFFHAND_EQUIPMENT )
 	titan.GiveOffhandWeapon( "mp_titancore_amp_core", OFFHAND_EQUIPMENT, ["npc_bt_balance"] )
+
+	// game behavior settings
+	entity soul = titan.GetTitanSoul()
+	if ( IsValid( soul ) )
+		PlayerEarnMeter_SetSoulEarnMeterSmokeEnabled( soul, false )	// disable earnmeter smoke availability, they already have electric smoke
 }
 
 void function InitDefaultNPCHandlerFunctions()
@@ -1085,8 +1105,13 @@ bool function CC_SpawnPilotAndTitan( entity player, array<string> args )
 	if( !BATTERY_SPAWNERS.contains( player.GetUID() ) )
 		return false
 
+	string spawnName = ""
+	if ( args.len() > 0 )
+		spawnName = args[0]
+	// if spawn name invalid, we will spawn a random titan
+
     Point dropPoint = GetTitanReplacementPoint( player )
-	thread ExtraSpawner_SpawnPilotCanEmbark( dropPoint.origin, dropPoint.angles, GetPlayerAISpawnTeam( player, args ) )
+	thread ExtraSpawner_SpawnPilotCanEmbark( dropPoint.origin, dropPoint.angles, GetPlayerAISpawnTeam( player, args ), spawnName )
 	return true
 }
 
@@ -1146,6 +1171,7 @@ bool function CC_SpawnSpecialistGrunt( entity player, array<string> args )
 	vector rot = < 0, ClampAngle( playerAngs.y - 180 ), 0 >
 	entity grunt = CreateNPC( "npc_soldier", GetPlayerAISpawnTeam( player, args ), pos, rot )
 	SetSpawnOption_AISettings( grunt, "npc_soldier_pve_specialist" )
+	SetSpawnOption_Weapon( grunt, "mp_weapon_pulse_lmg" )
 
 	file.npcSpawnFromExtraSpawner[ grunt ] <- true
 	DispatchSpawn( grunt ) // don't delayed dispatchSpawn()
@@ -1205,7 +1231,7 @@ bool function CC_SpawnTestPistolGrunt( entity player, array<string> args )
 	vector rot = < 0, ClampAngle( playerAngs.y - 180 ), 0 >
 	entity grunt = CreateNPC( "npc_soldier", GetPlayerAISpawnTeam( player, args ), pos, rot )
 	grunt.SetBehaviorSelector( "behavior_sp_soldier" ) // they'll switch to pistol if needed
-	//SetSpawnOption_Weapon( grunt, "mp_weapon_smart_pistol" )
+	SetSpawnOption_Weapon( grunt, "mp_weapon_smart_pistol" )
 	//SetSpawnOption_Weapon( grunt, "mp_weapon_wingman" )
 	//SetSpawnOption_Weapon( grunt, "mp_weapon_autopistol" )
 	//SetSpawnOption_Weapon( grunt, "mp_weapon_semipistol" )
@@ -1223,6 +1249,54 @@ bool function CC_SpawnTestPistolGrunt( entity player, array<string> args )
 	//grunt.SetModel( $"models/robots/spectre/imc_spectre.mdl" )
 
 	return true
+}
+
+bool function CC_SpawnFakeMLTSpectre( entity player, array<string> args )
+{
+	if( !BATTERY_SPAWNERS.contains( player.GetUID() ) )
+		return false
+
+	vector pos = GetPlayerCrosshairOrigin( player )
+	vector playerAngs = player.EyeAngles()
+	vector rot = < 0, ClampAngle( playerAngs.y - 180 ), 0 >
+
+	entity spectre = CreateNPC( "npc_spectre", GetPlayerAISpawnTeam( player, args ), pos, rot )
+	SetSpawnOption_Weapon( spectre, "mp_weapon_pulse_lmg" )
+	spectre.SetBehaviorSelector( "behavior_stalker" ) // so they don't do spectre specific behaviors, which they're missing animations
+	spectre.EnableNPCMoveFlag( NPCMF_PREFER_SPRINT ) // can stalker sprint?
+	spectre.DisableNPCFlag( NPC_CROUCH_COMBAT ) // pistol activity don't have crouch animations, disable crouch combat
+
+	file.npcSpawnFromExtraSpawner[ spectre ] <- true
+	DispatchSpawn( spectre )
+
+	spectre.SetMaxHealth( 5000 )
+	spectre.SetHealth( 5000 )
+	// use stalker head
+	spectre.SetModel( $"models/Robots/stalker/robot_stalker.mdl" )
+	spectre.SetNPCMoveSpeedScale( 1.5 ) // stalkers always walk, make them do it faster
+	thread PrintColdWarNPCPrimaryAttack( spectre )
+
+	return true
+}
+
+void function PrintColdWarNPCPrimaryAttack( entity npc )
+{
+	npc.EndSignal( "OnDeath" )
+	npc.EndSignal( "OnDestroy" )
+
+	int lastAmmo
+	while ( true )
+	{
+		int currentAmmo
+		entity activeWeapon = npc.GetActiveWeapon()
+		if ( IsValid( activeWeapon ) )
+			currentAmmo = activeWeapon.GetWeaponPrimaryClipCount()
+
+		if ( lastAmmo != currentAmmo )
+			print( "currentAmmo: " + string( currentAmmo ) )
+		lastAmmo = currentAmmo
+		WaitFrame()
+	}
 }
 
 // utility
@@ -1378,15 +1452,6 @@ void function ExtraSpawner_ApplyNPCExtraWeaponMods( entity npc )
 	}
 }
 
-// modified, since WT_ANTITITAN won't work in r2, hardcoded
-const array<string> ANTI_TITAN_WEAPONS =
-[
-	"mp_weapon_defender",
-	"mp_weapon_rocket_launcher",
-	"mp_weapon_arc_launcher", // can't be used by npcs if vanilla
-	"mp_weapon_mgl"
-]
-
 void function OnEnemyChanged_SwitchToHeavyArmorWeapon( entity guy )
 {
 	// every npc has this, but we'll save ones who have better proficiency
@@ -1398,52 +1463,50 @@ void function OnEnemyChanged_SwitchToHeavyArmorWeapon( entity guy )
 		return
 
 	array<entity> weapons = guy.GetMainWeapons()
-	// sniper grunt debug: don't know why they get a incorrect weapon cycle
-	/* // fixed: adding active weaponName check in foreach()
-	if ( guy.GetAISettingsName() == "npc_soldier_sidearm" )
-	{
-		foreach ( entity weapon in weapons )
-			print( "weapon: " + weapon.GetWeaponClassName() )
-	}
-	*/
-
 	// do we have a weapon to switch to?
 	if ( weapons.len() < 2 )
 		return
 
 	entity activeWeapon = guy.GetActiveWeapon()
-	string acitveWeaponName = ""
-	if ( IsValid( activeWeapon ) )
-		acitveWeaponName = activeWeapon.GetWeaponClassName()
+	if ( !IsValid( activeWeapon ) ) // must be disabled weapon, no need to do following checks
+		return
+
+	string acitveWeaponName = activeWeapon.GetWeaponClassName()
+	bool antiTitanActive = activeWeapon != weapons[0] && !activeWeapon.GetWeaponSettingBool( eWeaponVar.titanarmor_critical_hit_required )
+
 	bool isHeavyArmorTarget = enemy.GetArmorType() == ARMOR_TYPE_HEAVY
 
 	string weaponToChange = ""
-	if( isHeavyArmorTarget )
+	if ( isHeavyArmorTarget && !antiTitanActive )
 	{
 		// first try to find an appropriate weapon
 		foreach ( entity weapon in weapons )
 		{
 			string className = weapon.GetWeaponClassName()
-			bool isAntiTitan = ANTI_TITAN_WEAPONS.contains( className )
-			if( isAntiTitan )
+			bool isMainWeapon = weapon == weapons[0]
+			bool isAntiTitan = !weapon.GetWeaponSettingBool( eWeaponVar.titanarmor_critical_hit_required )
+			if ( isAntiTitan && !isMainWeapon )
 			{
 				if ( acitveWeaponName == className ) // already holding this weapon
 					return
 				weaponToChange = className
+				break
 			}
 		}
 	}
-	else // light unit, switch off anti-titans
+	else if ( antiTitanActive ) // light unit, switch off anti-titans
 	{
 		foreach ( entity weapon in weapons )
 		{
 			string className = weapon.GetWeaponClassName()
-			bool isPrimary = !ANTI_TITAN_WEAPONS.contains( className )
-			if( isPrimary )
+			bool isMainWeapon = weapon == weapons[0]
+			bool isAntiTitan = !weapon.GetWeaponSettingBool( eWeaponVar.titanarmor_critical_hit_required )
+			if ( isMainWeapon || !isAntiTitan )
 			{
 				if ( acitveWeaponName == className ) // already holding this weapon
 					return
 				weaponToChange = className
+				break
 			}
 		}
 	}
@@ -2379,6 +2442,7 @@ void function SetUpSpecialistGrunt( entity npc, string aiSet )
 			//sideArm.AddMod( "npc_sniper_grunt" ) // removed, which is overpowered
 
 			npc.EnableNPCFlag( NPC_NO_WEAPON_DROP ) // due sniper grunts have specific weapon, make them never drop weapons
+			npc.DisableNPCFlag( NPC_CROUCH_COMBAT ) // pistol activity don't have crouch animations, disable crouch combat
 
 			break
 
@@ -2414,6 +2478,7 @@ void function SetUpSpecialistGrunt( entity npc, string aiSet )
 			npc.SetActiveWeaponByName( weaponToChoose )
 
 			npc.EnableNPCFlag( NPC_NO_WEAPON_DROP ) // elite guard grunts never drops weapon
+			npc.DisableNPCFlag( NPC_CROUCH_COMBAT ) // pistol activity don't have crouch animations, disable crouch combat
 
 			break
 	}
@@ -2805,7 +2870,13 @@ void function ExtraSpawner_SetUpNPCEmbarkedTitan( entity titan )
 	//titan.SetCanBeMeleeExecuted( false ) // code synced melee ignores this
 	if ( MeleeSyncedNPC_IsTitanOnlyAllowedToExecuteWithNPCPilot() )
 		titan.SetCapabilityFlag( bits_CAP_SYNCED_MELEE_ATTACK, false ) // disable synced melee behavior, we use melee_synced_npc
-	TitanHealth_SetTitanCoreBuilderMultiplier( titan, 2.5 ) // want them get core abilities faster
+	// soul settings
+	entity soul = titan.GetTitanSoul()
+	if ( IsValid( soul ) )
+	{
+		TitanHealth_SetTitanCoreBuilderMultiplier( titan, 2.5 ) // want them get core abilities faster
+		PlayerEarnMeter_EnableSoulNPCTitanEarnMeterSmokeUsage( soul, true ) // allow this npc titan use reward electric smoke
+	}
 }
 
 function OnNpcTitanBecomesPilot( pilot, titan )
@@ -2824,7 +2895,7 @@ function OnNpcTitanBecomesPilot( pilot, titan )
 	if ( GetNPCHandlerForClass( "npc_pilot_elite" ) != null )
 		thread GetNPCHandlerForClass( "npc_pilot_elite" )( pilot )
 
-	if ( IsValid( titan ) ) // disembarking, unfortunatelly this is not featured
+	if ( IsValid( titan ) )
 	{
 		entity titanSoul = titan.GetTitanSoul()
 		if( !IsValid( titanSoul ) ) // defensive fix for titan.Destroy() situations
@@ -2836,19 +2907,28 @@ function OnNpcTitanBecomesPilot( pilot, titan )
 		if( isEjecting )
 			thread NPCPilotEjectingAnimation( pilot )
 		else // not ejecting, reset to normal behavior. this never happens cause there're no logic about npc pilot disembarking
-		{
-			titan.kv.WeaponProficiency = eWeaponProficiency.AVERAGE
-			//titan.SetCanBeMeleeExecuted( true ) // npc synced melee ignores this
-			titan.SetBehaviorSelector( "behavior_mp_auto_titan" )
-			if ( MeleeSyncedNPC_IsTitanOnlyAllowedToExecuteWithNPCPilot() )
-				titan.SetCapabilityFlag( bits_CAP_SYNCED_MELEE_ATTACK, true ) // restore synced melee for auto-titans
-			TitanHealth_SetTitanCoreBuilderMultiplier( titan, 1.0 ) // reset core build speed to normal
-		}
+			ExtraSpawner_SetUpNPCDisembarkedTitan( titan )
 
 		// kinda annoying to have a info target all around them.
 		//string aiSetFile = titan.GetAISettingsName()
 		//titan.SetAISettings( aiSetFile.slice( 0, aiSetFile.len() - 7 ) ) // not ejecting, back to normal health bar
 		//Highlight_ClearEnemyHighlight( titan ) // this resets highlights in modified sh_highlights
+	}
+}
+
+void function ExtraSpawner_SetUpNPCDisembarkedTitan( entity titan )
+{
+	titan.kv.WeaponProficiency = eWeaponProficiency.AVERAGE
+	//titan.SetCanBeMeleeExecuted( true ) // npc synced melee ignores this
+	titan.SetBehaviorSelector( "behavior_mp_auto_titan" )
+	if ( MeleeSyncedNPC_IsTitanOnlyAllowedToExecuteWithNPCPilot() )
+		titan.SetCapabilityFlag( bits_CAP_SYNCED_MELEE_ATTACK, true ) // restore synced melee for auto-titans
+	// soul settings
+	entity soul = titan.GetTitanSoul()
+	if ( IsValid( soul ) )
+	{
+		TitanHealth_SetTitanCoreBuilderMultiplier( titan, 1.0 ) // reset core build speed to normal
+		PlayerEarnMeter_EnableSoulNPCTitanEarnMeterSmokeUsage( soul, false ) // disable npc titan reward electric smoke usage
 	}
 }
 
@@ -3069,15 +3149,27 @@ const float CARE_PACKAGE_LIFETIME = 30
 const float CARE_PACKAGE_WAITTIME = 5
 void function ExtraSpawner_SpawnCarePackageToGetWeapons( vector pos, vector rot, float lifeTime = CARE_PACKAGE_LIFETIME, float waitTime = CARE_PACKAGE_WAITTIME )
 {
-	//thread DropWeaponAlert( pos, 500, 200 )
-	thread CarePackage_SpawnPoint( pos, 10 )
-	thread ExtraSpawner_SpawnCarePackageToGetWeapons_Threaded( pos, rot, lifeTime, waitTime )
+	ExtraSpawner_SpawnCarePackage( pos, rot, CarePackage_GiveWeapon, "獲取武器", lifeTime, waitTime )
 }
 
-void function ExtraSpawner_SpawnCarePackageToGetWeapons_Threaded( vector pos, vector rot, float lifeTime, float waitTime )
+// care package variant: ammo refill only
+void function ExtraSpawner_SpawnCarePackageToRefillAmmo( vector pos, vector rot, float lifeTime = CARE_PACKAGE_LIFETIME, float waitTime = CARE_PACKAGE_WAITTIME )
 {
-	file.usedplayer.clear()
+	ExtraSpawner_SpawnCarePackage( pos, rot, CarePackage_RefillAmmo, "補充彈藥", lifeTime, waitTime )
+}
+
+void function ExtraSpawner_SpawnCarePackage( vector pos, vector rot, useFunction, string usePrompt, float lifeTime, float waitTime )
+{
+	//thread DropWeaponAlert( pos, 500, 200 )
+	thread CarePackage_SpawnPoint( pos, waitTime + 5 ) // care package takes 5s to drop
+	thread ExtraSpawner_SpawnCarePackage_Threaded( pos, rot, useFunction, usePrompt, lifeTime, waitTime )
+}
+
+void function ExtraSpawner_SpawnCarePackage_Threaded( vector pos, vector rot, useFunction, string usePrompt, float lifeTime, float waitTime )
+{
 	wait waitTime
+
+	file.carePackageUsedPlayers.clear()
 	entity pod = CreateDropPod( pos, <0,0,0> )
 	pod.EndSignal( "OnDestroy" )
 	Highlight_SetOwnedHighlight( pod, "friendly_ai" )
@@ -3089,8 +3181,8 @@ void function ExtraSpawner_SpawnCarePackageToGetWeapons_Threaded( vector pos, ve
 
 	pod.SetUsable()
 	pod.SetUsableByGroup( "pilot" )
-	pod.SetUsePrompts( "按住 %use% 以獲取武器", "按下 %use% 獲取武器" )
-	AddCallback_OnUseEntity( pod , GiveAirDropWeapon )
+	pod.SetUsePrompts( "按住 %use% 以" + usePrompt, "按下 %use% 以" + usePrompt )
+	AddCallback_OnUseEntity( pod, useFunction )
 
 	HighlightDropPod( pod )
 	pod.SetModel( CAREPACKAGE_MODEL )
@@ -3102,6 +3194,7 @@ void function ExtraSpawner_SpawnCarePackageToGetWeapons_Threaded( vector pos, ve
 	pod.NotSolid() // clear collision
 	DisableDropPodHighlight( pod )
 	pod.Dissolve( ENTITY_DISSOLVE_CORE, Vector( 0, 0, 0 ), 500 )
+	EmitSoundAtPosition( TEAM_UNASSIGNED, pod.GetOrigin(), "droppod_dissolve" )
 }
 
 // copied from cl_replacement_titan_hud.gnut
@@ -3122,26 +3215,29 @@ void function CarePackage_SpawnPoint( vector origin, float impactTime )
 		EffectStop( targetEffect )
 }
 
-function GiveAirDropWeapon( pod , player )
+function CarePackage_GiveWeapon( pod , player )
 {
 	expect entity( player )
 	vector pos = player.GetOrigin()
 
-	if( file.usedplayer.contains( player ) )
+	if( file.carePackageUsedPlayers.contains( player ) )
 	{
 		//SendHudMessage(player, "Once Robbed Weapon from Care Package\nPlease Wait for Next Delivery",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1)
 		SendHudMessage( player, "已獲取本次補給艙\n請等待下一輪",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1 )
 		return
 	}
+
     //DropModdedWeapons( WEAPONS, pos, MODS )
 	if( player.GetMainWeapons().len() == 3 )
 		player.DropWeapon( player.GetMainWeapons()[2] ) // was [1], for the newest version, drop the grenadier!
 	//GiveModdedWeapons( player, WEAPONS, MODS )
 	GiveModdedWeapons( player, file.carePackageWeapons )
 	RestorePlayerAmmo( player )
+
     //SendHudMessage(player, "Got Weapon from Care Package",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1)
     SendHudMessage( player, "已從補給艙補充彈藥",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1 )
-	file.usedplayer.append( player )
+
+	file.carePackageUsedPlayers.append( player )
 	player.Signal( "PlayerUsedCarePackage" )
 }
 
@@ -3154,6 +3250,25 @@ void function GiveModdedWeapons( entity player, array<string> weapons )
 		mods = file.carePackageWeaponMods[weaponName]
 	player.GiveWeapon( weaponName, mods )
 	player.SetActiveWeaponByName( weaponName )
+}
+
+function CarePackage_RefillAmmo( pod , player )
+{
+	expect entity( player )
+
+	if( file.carePackageUsedPlayers.contains( player ) )
+	{
+		//SendHudMessage(player, "Once Robbed Weapon from Care Package\nPlease Wait for Next Delivery",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1)
+		SendHudMessage( player, "已獲取本次補給艙\n請等待下一輪",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1 )
+		return
+	}
+
+	RestorePlayerAmmo( player )
+    //SendHudMessage(player, "Got Weapon from Care Package",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1)
+    SendHudMessage( player, "已從補給艙補充彈藥",  -1, 0.3, 255, 255, 0, 255, 0.15, 3, 1 )
+
+	file.carePackageUsedPlayers.append( player )
+	player.Signal( "PlayerUsedCarePackage" )
 }
 
 void function RestorePlayerAmmo( entity player )
