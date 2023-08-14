@@ -389,7 +389,9 @@ void function RodeoBatteryRemoval_ShowBattery( entity pilot )
 
 void function RodeoBatteryStealthMovementWarning( entity pilot )
 {
-	if ( !PlayerHasPassive( pilot, ePassives.PAS_STEALTH_MOVEMENT ) )
+	// modified settings override, in case we want to hide player's jetpack flame but we don't want to make them use stealth rodeo
+	//if ( !PlayerHasPassive( pilot, ePassives.PAS_STEALTH_MOVEMENT ) )
+	if ( !Rodeo_PlayerDoStealthMovement( pilot ) )
 		return
 
 	entity titanSoul = pilot.GetTitanSoulBeingRodeoed()
@@ -854,6 +856,8 @@ void function TryBatteryStyleRodeo( entity rodeoPilot, entity rodeoTitan, entity
 	}
 	#endif
 
+	// debug
+	//print( "RUNNING Vanilla rodeo offensive sequence" )
 	if ( ShouldThrowGrenadeInHatch( rodeoPilot ) )
 	{
 		waitthread PlayerThrowsGrenadeInHatch( rodeoPilot, rodeoTitan, titanSoul, rodeoPackage ) //This ends rodeo at the end of the sequence

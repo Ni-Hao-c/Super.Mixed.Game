@@ -101,6 +101,12 @@ void function AddPlayerScore( entity targetPlayer, string scoreEventName, entity
 	{
 		earnValue *= pilotScaleVar
 		ownValue *= pilotScaleVar
+		// if pilot player can't earn, remove earn value display
+		if ( !PlayerEarnMeter_CanEarn( targetPlayer ) )
+		{
+			earnValue = 0.0
+			ownValue = 0.0
+		}
 	}
 	
 	if ( displayTypeOverride != null ) // has overrides?
