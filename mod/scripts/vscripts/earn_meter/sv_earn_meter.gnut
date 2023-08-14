@@ -40,9 +40,6 @@ global function SharedEarnMeter_AddEarnedAndOwned
 global function PlayerEarnMeter_SetEnabled
 global function PlayerEarnMeter_Enabled
 
-// modified!!! for managing titan's offhand smoke
-global function PlayerEarnMeter_SetSoulEarnMeterSmokeEnabled
-
 global struct EarnMeterThresholdEarnedStruct
 {
 	float threshold
@@ -490,14 +487,6 @@ void function JFS_PlayerEarnMeter_CoreRewardUpdate( entity titan, float starting
 void function GiveOffhandElectricSmoke( entity titan )
 {
 	entity soul = titan.GetTitanSoul()
-	// modified to manage modded titan's smoke
-	if ( soul in file.soulEarnMeterSmokeEnabled ) // add via PlayerEarnMeter_SetSoulEarnMeterSmokeEnabled()
-	{
-		if( !file.soulEarnMeterSmokeEnabled[ soul ] )
-			return
-	}
-	
-	//entity soul = titan.GetTitanSoul() // moved up
 	bool hasAntiRodeoKit = IsValid( soul ) && SoulHasPassive( soul, ePassives.PAS_ANTI_RODEO )
 	if ( titan.GetOffhandWeapon( OFFHAND_INVENTORY ) != null )
 	{
@@ -533,12 +522,4 @@ void function PlayerEarnMeter_SetEnabled( bool enabled )
 bool function PlayerEarnMeter_Enabled()
 {
 	return file.earnMeterEnabled
-}
-
-// modified!!! for managing titan's boost smoke
-void function PlayerEarnMeter_SetSoulEarnMeterSmokeEnabled( entity titanSoul, bool enabled )
-{
-	if ( !( titanSoul in file.soulEarnMeterSmokeEnabled ) )
-		file.soulEarnMeterSmokeEnabled[ titanSoul ] <- true // default value
-	file.soulEarnMeterSmokeEnabled[ titanSoul ] = enabled
 }
