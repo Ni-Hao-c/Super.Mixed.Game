@@ -389,9 +389,7 @@ void function RodeoBatteryRemoval_ShowBattery( entity pilot )
 
 void function RodeoBatteryStealthMovementWarning( entity pilot )
 {
-	// modified settings override, in case we want to hide player's jetpack flame but we don't want to make them use stealth rodeo
-	//if ( !PlayerHasPassive( pilot, ePassives.PAS_STEALTH_MOVEMENT ) )
-	if ( !Rodeo_PlayerDoStealthMovement( pilot ) )
+	if ( !PlayerHasPassive( pilot, ePassives.PAS_STEALTH_MOVEMENT ) )
 		return
 
 	entity titanSoul = pilot.GetTitanSoulBeingRodeoed()
