@@ -18,15 +18,16 @@ void function Nessie_Useful_Commands_Init()
 	// custom suicide damagesource
 	RegisterWeaponDamageSource( "farewell_cruel_world", "Farewell World" )
 	// overrides northstar default killcommand
-	AddClientCommandCallback( "kill", SelfKillCommand )
-	AddClientCommandCallback( "explode", SelfExplodeCommand )
+	// don't enable these commands in english gruntmode branch
+	//AddClientCommandCallback( "kill", SelfKillCommand )
+	//AddClientCommandCallback( "explode", SelfExplodeCommand )
 	//
-	AddClientCommandCallback( "dissolve", SelfDissolveCommand )
-	AddClientCommandCallback( "pinkmist", SelfPinkMistCommand )
-	AddClientCommandCallback( "ragdoll", SelfRagdollDeathCommand )
+	//AddClientCommandCallback( "dissolve", SelfDissolveCommand )
+	//AddClientCommandCallback( "pinkmist", SelfPinkMistCommand )
+	//AddClientCommandCallback( "ragdoll", SelfRagdollDeathCommand )
 
-	AddClientCommandCallback( "kill_admin", AdminSelfKill )
-	AddClientCommandCallback( "explode_admin", AdminSelfExplode )
+	//AddClientCommandCallback( "kill_admin", AdminSelfKill )
+	//AddClientCommandCallback( "explode_admin", AdminSelfExplode )
 
 	AddClientCommandCallback( "dropweapon", PlayerDropActiveWeapon )
 	AddClientCommandCallback( "selfdamage", OPSelfDamage )
